@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          HI_GITHUB_CLIENT_ID: ${{ secrets.HI_GITHUB_CLIENT_ID }}
+          HI_SUPABASE_URL: ${{ secrets.HI_SUPABASE_URL }}
+          HI_SUPABASE_ANON_KEY: ${{ secrets.HI_SUPABASE_ANON_KEY }}
+          HI_SIGNAL_REPO_OWNER: ${{ secrets.HI_SIGNAL_REPO_OWNER }}
+          HI_SIGNAL_REPO_NAME: ${{ secrets.HI_SIGNAL_REPO_NAME }}
+        run: |
+          go build -ldflags="-s -w \
+            -X main.GitHubClientID=$HI_GITHUB_CLIENT_ID \
+            -X main.SupabaseURL=$HI_SUPABASE_URL \
+            -X main.SupabaseAnonKey=$HI_SUPABASE_ANON_KEY \
+            -X main.SignalRepoOwner=$HI_SIGNAL_REPO_OWNER \
+            -X main.SignalRepoName=$HI_SIGNAL_REPO_NAME" \
+            -o hi_${{ matrix.goos }}_${{ matrix.goarch }} .
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hi_${{ matrix.goos }}_${{ matrix.goarch }}
