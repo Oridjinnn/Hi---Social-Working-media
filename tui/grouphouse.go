@@ -14,6 +14,8 @@ import (
 
 	"github.com/Oridjinnn/hi/config"
 	"github.com/Oridjinnn/hi/grouphouse"
+	"github.com/Oridjinnn/hi/history"
+	"github.com/Oridjinnn/hi/utils"
 )
 
 // ── Group House styles ──────────────────────────────────────────────────────
@@ -66,6 +68,8 @@ type GroupHouseModel struct {
 	selectedModel   string
 	showModelMenu   bool
 	logOffset       int
+	history         *history.History
+	historyMode     bool
 	err             error
 	width           int
 }
@@ -76,12 +80,14 @@ type ghPullDoneMsg struct {
 }
 
 func NewGroupHouseModel(cfg *config.Config) GroupHouseModel {
+	historyData, _ := history.Load()
 	return GroupHouseModel{
 		cfg:             cfg,
 		port:            9753,
 		agents:          []grouphouse.AgentInfo{},
 		log:             []ghLogEntry{},
 		recommendations: getHardwareRecommendations(),
+		history:         historyData,
 	}
 }
 
@@ -329,12 +335,16 @@ func (m GroupHouseModel) Update(msg tea.Msg) (GroupHouseModel, tea.Cmd) {
 			m.port = msg.port
 		}
 		m.isRunning = true
-		m.log = append(m.log, ghLogEntry{
+		logEntry := ghLogEntry{
 			Timestamp: time.Now(),
 			Sender:    "system",
 			Text:      fmt.Sprintf("House started on port %d", m.port),
 			MsgType:   "join",
-		})
+		}
+		m.log = append(m.log, logEntry)
+		if m.history != nil {
+			m.history.LogGroupEvent(logEntry.Text)
+		}
 		return m, m.fetchLocalModels()
 
 	case ghModelsLoadedMsg:
@@ -362,6 +372,9 @@ func (m GroupHouseModel) Update(msg tea.Msg) (GroupHouseModel, tea.Cmd) {
 			m.log = append(m.log, msg.log)
 			if len(m.log) > 100 {
 				m.log = m.log[len(m.log)-100:]
+			}
+			if m.history != nil {
+				m.history.LogGroupEvent(msg.log.Text)
 			}
 		}
 		return m, nil
@@ -417,12 +430,16 @@ func (m GroupHouseModel) Update(msg tea.Msg) (GroupHouseModel, tea.Cmd) {
 			case "enter":
 				text := strings.TrimSpace(m.inputText)
 				if text != "" {
-					m.log = append(m.log, ghLogEntry{
+					entry := ghLogEntry{
 						Timestamp: time.Now(),
 						Sender:    m.cfg.GitHubUsername,
 						Text:      text,
 						MsgType:   "broadcast",
-					})
+					}
+					m.log = append(m.log, entry)
+					if m.history != nil {
+						m.history.LogGroupEvent(entry.Text)
+					}
 				}
 				m.inputText = ""
 				m.inputActive = false
@@ -445,6 +462,9 @@ func (m GroupHouseModel) Update(msg tea.Msg) (GroupHouseModel, tea.Cmd) {
 		}
 
 		switch msg.String() {
+		case "h":
+			m.historyMode = !m.historyMode
+			return m, nil
 		case "s":
 			if !m.isRunning {
 				return m, m.startServer()
@@ -486,6 +506,10 @@ func (m GroupHouseModel) View() string {
 		return m.renderStartPrompt()
 	}
 
+	if m.historyMode {
+		return m.renderGroupHistory()
+	}
+
 	// Header with shared styles
 	statusColor := Success
 	statusText := "● RUNNING"
@@ -517,10 +541,11 @@ func (m GroupHouseModel) View() string {
 	inputBar := m.renderInputBar()
 	b.WriteString("\n" + inputBar)
 
-	help := HelpStyle.Render(fmt.Sprintf("  %s send message  %s stop house  %s scroll log  %s close input",
+	help := HelpStyle.Render(fmt.Sprintf("  %s send message  %s stop house  %s scroll log  %s history  %s close input",
 		RenderKeyHint("i"),
 		RenderKeyHint("q"),
 		RenderKeyHint("↑", "↓"),
+		RenderKeyHint("h"),
 		RenderKeyHint("esc"),
 	))
 	b.WriteString("\n" + help)
@@ -570,6 +595,26 @@ func (m GroupHouseModel) renderStartPrompt() string {
 	)
 
 	return "\n  " + box + "\n\n" + HelpStyle.Render("  tab: switch tabs · 1/2/3: jump")
+}
+
+func (m GroupHouseModel) renderGroupHistory() string {
+	header := CardHeaderStyle.Render("⏪ Rewind — Group House history") + "\n\n"
+	if m.history == nil {
+		return CardStyle.Width(m.width).Render(header + CaptionStyle.Render("  No group history available."))
+	}
+
+	var lines []string
+	events := m.history.RecentGroupEvents()
+	for i := len(events) - 1; i >= 0 && i >= len(events)-15; i-- {
+		event := events[i]
+		lines = append(lines, fmt.Sprintf("  • [%s] %s", utils.TimeAgo(event.Timestamp), event.Event))
+	}
+	if len(lines) == 0 {
+		lines = append(lines, "  No group history recorded yet.")
+	}
+
+	content := header + strings.Join(lines, "\n") + "\n\n" + HelpStyle.Render(fmt.Sprintf("  %s close", RenderKeyHint("h")))
+	return CardStyle.Width(m.width).Render(content)
 }
 
 func cardWidth(m *GroupHouseModel, hardcoded int) int {

@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/spf13/cobra"
 	"github.com/Oridjinnn/hi/config"
 	"github.com/Oridjinnn/hi/grouphouse"
+	"github.com/spf13/cobra"
 )
 
 var (

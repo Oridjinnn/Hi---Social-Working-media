@@ -1,0 +1,14 @@
+run:
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - gofmt
+    - gosimple
+    - unused
+
+issues:
+  exclude-use-default: false

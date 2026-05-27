@@ -12,10 +12,10 @@ import (
 )
 
 type ToastModel struct {
-	event     models.ConnectionEvent
-	visible   bool
-	timer     int
-	maxTicks  int
+	event    models.ConnectionEvent
+	visible  bool
+	timer    int
+	maxTicks int
 }
 
 func NewToast(event models.ConnectionEvent) ToastModel {

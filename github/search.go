@@ -39,9 +39,9 @@ func (c *Client) FetchGhostSignals(stacks []string) ([]models.Signal, error) {
 
 	var res struct {
 		Items []struct {
-			ID       int64  `json:"id"`
-			FullName string `json:"full_name"`
-			HTMLURL  string `json:"html_url"`
+			ID       int64                  `json:"id"`
+			FullName string                 `json:"full_name"`
+			HTMLURL  string                 `json:"html_url"`
 			Owner    struct{ Login string } `json:"owner"`
 		} `json:"items"`
 	}

@@ -22,19 +22,19 @@ import (
 )
 
 type TrendRepo struct {
-	Name        string
-	Owner       string
-	Language    string
-	Stars       int
-	OpenIssues  int
-	PushedAt    time.Time
-	HTMLURL     string
+	Name         string
+	Owner        string
+	Language     string
+	Stars        int
+	OpenIssues   int
+	PushedAt     time.Time
+	HTMLURL      string
 	StarVelocity string
 }
 
 type TrendData struct {
-	Stack              []string
-	TopRepos           []TrendRepo
+	Stack             []string
+	TopRepos          []TrendRepo
 	WeeklyDelta       string
 	SimilarBuilders   []models.Signal
 	FetchedAtUnixSecs int64
@@ -46,14 +46,14 @@ type trendCachePayload struct {
 }
 
 type TrendModel struct {
-	data        TrendData
-	loading     bool
-	err         error
-	width       int
-	client      *github.Client
-	cfg         *config.Config
-	cachePath   string
-	loadedOnce  bool
+	data       TrendData
+	loading    bool
+	err        error
+	width      int
+	client     *github.Client
+	cfg        *config.Config
+	cachePath  string
+	loadedOnce bool
 }
 
 func NewTrendModel(client *github.Client, cfg *config.Config) *TrendModel {
@@ -73,9 +73,9 @@ func NewTrendModel(client *github.Client, cfg *config.Config) *TrendModel {
 		cfg:       cfg,
 		cachePath: cachePath,
 		data: TrendData{
-			Stack:            stacks,
-			TopRepos:         []TrendRepo{},
-			WeeklyDelta:      "",
+			Stack:           stacks,
+			TopRepos:        []TrendRepo{},
+			WeeklyDelta:     "",
 			SimilarBuilders: []models.Signal{},
 		},
 	}
@@ -194,14 +194,14 @@ func fetchTrendingByLanguage(client *github.Client, language string, perPage int
 
 	var res struct {
 		Items []struct {
-			FullName   string    `json:"full_name"`
+			FullName   string                 `json:"full_name"`
 			Owner      struct{ Login string } `json:"owner"`
-			Name       string    `json:"name"`
-			Language   string    `json:"language"`
-			Stargazers  int       `json:"stargazers_count"`
-			OpenIssues  int      `json:"open_issues_count"`
-			PushedAt    time.Time `json:"pushed_at"`
-			HTMLURL     string    `json:"html_url"`
+			Name       string                 `json:"name"`
+			Language   string                 `json:"language"`
+			Stargazers int                    `json:"stargazers_count"`
+			OpenIssues int                    `json:"open_issues_count"`
+			PushedAt   time.Time              `json:"pushed_at"`
+			HTMLURL    string                 `json:"html_url"`
 		}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
@@ -211,13 +211,13 @@ func fetchTrendingByLanguage(client *github.Client, language string, perPage int
 	out := make([]TrendRepo, 0, len(res.Items))
 	for _, it := range res.Items {
 		out = append(out, TrendRepo{
-			Name:     it.Name,
-			Owner:    it.Owner.Login,
-			Language: it.Language,
-			Stars:    it.Stargazers,
+			Name:       it.Name,
+			Owner:      it.Owner.Login,
+			Language:   it.Language,
+			Stars:      it.Stargazers,
 			OpenIssues: it.OpenIssues,
-			PushedAt:  it.PushedAt,
-			HTMLURL:   it.HTMLURL,
+			PushedAt:   it.PushedAt,
+			HTMLURL:    it.HTMLURL,
 		})
 	}
 	return out, nil

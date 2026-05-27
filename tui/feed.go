@@ -14,6 +14,7 @@ import (
 
 	"github.com/Oridjinnn/hi/config"
 	"github.com/Oridjinnn/hi/github"
+	"github.com/Oridjinnn/hi/history"
 	"github.com/Oridjinnn/hi/models"
 	"github.com/Oridjinnn/hi/notify"
 	"github.com/Oridjinnn/hi/supabase"
@@ -214,6 +215,10 @@ type FeedModel struct {
 	realtimeState    RealtimeConnState
 	realtimeLastSync time.Time
 	realtimeErr      string
+	// Signal history / rewind
+	history       *history.History
+	historyMode   bool
+	historyCursor int
 	// Wizard mode
 	wizard     *WizardModel
 	wizardDone bool
@@ -284,6 +289,8 @@ func NewFeedModel(client *github.Client, supaClient *supabase.Client, cfg *confi
 	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(MutedLight)
 	ti.Width = 60
 
+	historyData, _ := history.Load()
+
 	return FeedModel{
 		list:          l,
 		signals:       nil,
@@ -293,6 +300,7 @@ func NewFeedModel(client *github.Client, supaClient *supabase.Client, cfg *confi
 		supaClient:    supaClient,
 		cfg:           cfg,
 		spinner:       sp,
+		history:       historyData,
 		filterOptions: []string{"all", "difficulty:beginner", "difficulty:intermediate", "difficulty:advanced", "type:contributor", "type:beginner", "type:showcase"},
 		searchInput:   ti,
 	}
@@ -378,6 +386,31 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.historyMode {
+			switch msg.String() {
+			case "up", "k":
+				if m.historyCursor > 0 {
+					m.historyCursor--
+				}
+				return m, tea.Batch(cmds...)
+			case "down", "j":
+				if m.historyCursor < len(m.historyItems())-1 {
+					m.historyCursor++
+				}
+				return m, tea.Batch(cmds...)
+			case "enter":
+				items := m.historyItems()
+				if len(items) > 0 && m.historyCursor < len(items) {
+					m.openHistoryEntry(items[m.historyCursor])
+				}
+				m.historyMode = false
+				return m, tea.Batch(cmds...)
+			case "h", "esc", "q":
+				m.historyMode = false
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
@@ -385,8 +418,14 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.signals) > 0 {
 				idx := m.list.Index()
 				sig := m.signals[idx]
+				m.logSignalVisit(&sig)
 				m.detail = NewDetailModel(&sig)
 			}
+			return m, tea.Batch(cmds...)
+
+		case "h":
+			m.historyMode = !m.historyMode
+			m.historyCursor = 0
 			return m, tea.Batch(cmds...)
 
 		case "/":
@@ -413,6 +452,10 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.signals) > 0 {
 				idx := m.list.Index()
 				sig := m.signals[idx]
+				m.logSignalVisit(&sig)
+				if m.history != nil {
+					m.history.LogChatSession(&sig)
+				}
 
 				if m.cfg == nil || m.cfg.GitHubToken == "" {
 					t := NewToast(models.ConnectionEvent{
@@ -544,6 +587,10 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConnectMsg:
 		if msg.Signal != nil {
+			m.logSignalVisit(msg.Signal)
+			if m.history != nil {
+				m.history.LogChatSession(msg.Signal)
+			}
 			c := NewChatModel(msg.Signal, m.client, m.cfg)
 			m.chat = c
 			if m.detail != nil {
@@ -756,6 +803,10 @@ func (m FeedModel) View() string {
 		return m.detail.View()
 	}
 
+	if m.historyMode {
+		return m.renderHistoryView()
+	}
+
 	// Build base feed content first
 	baseContent := m.renderBaseFeed()
 
@@ -799,7 +850,7 @@ func (m FeedModel) renderBaseFeed() string {
 	feedView.WriteString(m.list.View())
 
 	// Condensed help bar with grouped key hints
-	help := HelpStyle.Render("  ↑/↓/j/k nav  n new  → detail  c connect  s ★  f filter  / search/N notif/r ref/q quit")
+	help := HelpStyle.Render("  ↑/↓/j/k nav  n new  → detail  c connect  s ★  f filter  / search  h history  N notif/r ref/q quit")
 	feedView.WriteString("\n")
 	feedView.WriteString(help)
 
@@ -858,6 +909,84 @@ func (m FeedModel) connectCmd(s models.Signal) tea.Cmd {
 	return func() tea.Msg {
 		return ConnectMsg{SignalID: s.ID, Signal: &s}
 	}
+}
+
+func (m FeedModel) logSignalVisit(signal *models.Signal) {
+	if signal == nil || m.history == nil {
+		return
+	}
+	m.history.LogSignalVisit(signal)
+}
+
+func (m FeedModel) renderHistoryView() string {
+	header := CardHeaderStyle.Render("⏪ Rewind — Recent activity") + "\n\n"
+	items := m.historyItems()
+	if len(items) == 0 {
+		return CardStyle.Width(60).Render(header + HelpStyle.Render("  History is empty — open a signal or chat to begin."))
+	}
+
+	var body strings.Builder
+	for i, item := range items {
+		prefix := "  "
+		style := CaptionStyle
+		if i == m.historyCursor {
+			prefix = "▸ "
+			style = HighlightStyle.Copy().Padding(0, 1)
+		}
+		body.WriteString(prefix + style.Render(item.summary) + "\n")
+	}
+
+	help := HelpStyle.Render("  " + RenderKeyHint("↑", "↓") + " navigate  " + RenderKeyHint("enter") + " open  " + RenderKeyHint("h") + " close")
+	return CardStyle.Width(80).Render(header + body.String() + "\n" + help)
+}
+
+func (m FeedModel) historyItems() []historyEntry {
+	var items []historyEntry
+	if m.history == nil {
+		return items
+	}
+	for _, visit := range m.history.RecentSignalVisits() {
+		items = append(items, historyEntry{
+			typeName: "signal",
+			title:    visit.Title,
+			summary:  fmt.Sprintf("Viewed %s by @%s — %s", visit.Title, visit.Author, utils.TimeAgo(visit.ViewedAt)),
+			signalID: visit.SignalID,
+			url:      visit.GitHubURL,
+		})
+	}
+	for _, chat := range m.history.RecentChatSessions() {
+		items = append(items, historyEntry{
+			typeName: "chat",
+			title:    chat.Title,
+			summary:  fmt.Sprintf("Chat opened for %s by @%s", chat.Title, chat.Author),
+			signalID: chat.SignalID,
+			url:      chat.GitHubURL,
+		})
+	}
+	return items
+}
+
+type historyEntry struct {
+	typeName string
+	title    string
+	summary  string
+	signalID int64
+	url      string
+}
+
+func (m FeedModel) openHistoryEntry(entry historyEntry) {
+	if entry.signalID == 0 {
+		return
+	}
+	sig := models.Signal{
+		ID:        entry.signalID,
+		Title:     entry.title,
+		GitHubURL: entry.url,
+		Author: models.User{
+			GitHubUsername: "unknown",
+		},
+	}
+	m.detail = NewDetailModel(&sig)
 }
 
 func (m FeedModel) loadSignals() tea.Cmd {

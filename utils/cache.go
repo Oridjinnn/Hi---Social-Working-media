@@ -15,7 +15,6 @@ type CacheFile[T any] struct {
 	Value    T
 }
 
-
 // ReadJSONCache reads JSON from `path` and validates TTL.
 // If file does not exist or is stale, it returns (zero, false, nil).
 func ReadJSONCache[T any](path string, ttl time.Duration) (T, bool, error) {
@@ -54,5 +53,3 @@ func WriteJSONCache[T any](path string, v T) error {
 	}
 	return os.WriteFile(path, data, 0o644)
 }
-
-

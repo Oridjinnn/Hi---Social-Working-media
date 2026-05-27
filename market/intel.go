@@ -48,8 +48,8 @@ type TopicIntel struct {
 	Topic      AITopic
 	TopRepos   []RepoSnapshot
 	TotalStars int
-	NewRepos   int  // repos created in last 30 days
-	HNHits     int  // HN stories mentioning this topic in last 7 days
+	NewRepos   int    // repos created in last 30 days
+	HNHits     int    // HN stories mentioning this topic in last 7 days
 	Momentum   string // "🚀 surging", "📈 rising", "➡ stable", "📉 cooling"
 }
 

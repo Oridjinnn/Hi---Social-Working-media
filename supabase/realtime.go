@@ -14,10 +14,10 @@ import (
 // A production version can be upgraded to Supabase Realtime WebSocket.
 
 type RealtimeClient struct {
-	client    *Client
-	username  string
-	notifyFn  func(models.ConnectionEvent)
-	stopCh    chan struct{}
+	client     *Client
+	username   string
+	notifyFn   func(models.ConnectionEvent)
+	stopCh     chan struct{}
 	pollTicker *time.Ticker
 }
 

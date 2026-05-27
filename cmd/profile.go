@@ -63,7 +63,6 @@ var profileCmd = &cobra.Command{
 			user.SignalCount = count
 		}
 
-
 		fmt.Println()
 		fmt.Printf("  @%s", user.GitHubUsername)
 		if isOwn {
@@ -90,4 +89,3 @@ var profileCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(profileCmd)
 }
-

@@ -18,18 +18,18 @@ type Client struct {
 	kind      ParticipantKind
 	agentID   string
 
-	conn   *websocket.Conn
-	mu     sync.Mutex
-	done   chan struct{}
+	conn *websocket.Conn
+	mu   sync.Mutex
+	done chan struct{}
 
 	// Callbacks
-	OnMessage     func(Message)
-	OnAgentJoined func(AgentInfo)
-	OnAgentLeft   func(string)
-	OnFileChanged func(FileChangedPayload)
-	OnRunResult   func(RunResultPayload)
-	OnError       func(ErrorPayload)
-	OnConnected   func()
+	OnMessage      func(Message)
+	OnAgentJoined  func(AgentInfo)
+	OnAgentLeft    func(string)
+	OnFileChanged  func(FileChangedPayload)
+	OnRunResult    func(RunResultPayload)
+	OnError        func(ErrorPayload)
+	OnConnected    func()
 	OnDisconnected func(error)
 }
 
@@ -92,10 +92,10 @@ func (c *Client) readLoop() {
 	for {
 		var msg Message
 		if err := c.conn.ReadJSON(&msg); err != nil {
-		// Suppress stdout/stderr logging to keep BubbleTea TUI intact.
-		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-			// no-op
-		}
+			// Suppress stdout/stderr logging to keep BubbleTea TUI intact.
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				// no-op
+			}
 
 			return
 		}

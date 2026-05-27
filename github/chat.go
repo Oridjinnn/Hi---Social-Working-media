@@ -16,7 +16,7 @@ type ChatMessage struct {
 
 func (c *Client) PostComment(signalID int64, body string) error {
 	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments", BaseURL, c.repoOwner, c.repoName, signalID)
-	
+
 	payload := map[string]string{"body": body}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -64,8 +64,8 @@ func (c *Client) PollComments(signalID int64, since time.Time) ([]ChatMessage, e
 
 	var ghComments []struct {
 		User      struct{ Login string } `json:"user"`
-		Body      string                `json:"body"`
-		CreatedAt time.Time             `json:"created_at"`
+		Body      string                 `json:"body"`
+		CreatedAt time.Time              `json:"created_at"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&ghComments); err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (c *Client) PollComments(signalID int64, since time.Time) ([]ChatMessage, e
 
 func (c *Client) ListComments(signalID int64) ([]ChatMessage, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments", BaseURL, c.repoOwner, c.repoName, signalID)
-	
+
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -97,8 +97,8 @@ func (c *Client) ListComments(signalID int64) ([]ChatMessage, error) {
 
 	var ghComments []struct {
 		User      struct{ Login string } `json:"user"`
-		Body      string                `json:"body"`
-		CreatedAt time.Time             `json:"created_at"`
+		Body      string                 `json:"body"`
+		CreatedAt time.Time              `json:"created_at"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&ghComments); err != nil {
 		return nil, err

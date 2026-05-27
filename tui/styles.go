@@ -76,15 +76,15 @@ var (
 			Padding(0, 2)
 
 	CardActiveStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder(), true).
-				BorderForeground(ActiveBorder).
-				Padding(0, 2)
+			Border(lipgloss.RoundedBorder(), true).
+			BorderForeground(ActiveBorder).
+			Padding(0, 2)
 
 	CardHeaderStyle = lipgloss.NewStyle().
-				Foreground(Primary).
-				Bold(true).
-				Padding(0, 1).
-				MarginBottom(1)
+			Foreground(Primary).
+			Bold(true).
+			Padding(0, 1).
+			MarginBottom(1)
 
 	CardBodyStyle = lipgloss.NewStyle().
 			Foreground(Foreground).
@@ -233,10 +233,10 @@ var (
 			Bold(true)
 
 	ButtonSecondary = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(Primary).
-				Foreground(Primary).
-				Padding(0, 1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(Primary).
+			Foreground(Primary).
+			Padding(0, 1)
 
 	ButtonDanger = lipgloss.NewStyle().
 			Background(Danger).
@@ -279,8 +279,8 @@ func RenderProgressBar(current, total int, width int, color lipgloss.TerminalCol
 // ── Key Hint Helper ────────────────────────────────────────────────────────
 
 var KeyHintStyle = lipgloss.NewStyle().
-		Foreground(PrimaryLight).
-		Bold(true)
+	Foreground(PrimaryLight).
+	Bold(true)
 
 func RenderKeyHint(keys ...string) string {
 	if len(keys) == 0 {

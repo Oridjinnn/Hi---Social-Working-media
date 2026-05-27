@@ -38,19 +38,19 @@ const (
 // ── Message envelope ────────────────────────────────────────────────────────
 
 type Message struct {
-	Type      MessageType `json:"type"`
-	Sender    string      `json:"sender,omitempty"`
+	Type       MessageType     `json:"type"`
+	Sender     string          `json:"sender,omitempty"`
 	SenderKind ParticipantKind `json:"sender_kind,omitempty"`
-	Payload   interface{} `json:"payload,omitempty"`
-	Timestamp time.Time   `json:"timestamp"`
+	Payload    interface{}     `json:"payload,omitempty"`
+	Timestamp  time.Time       `json:"timestamp"`
 }
 
 // ── Payload types ───────────────────────────────────────────────────────────
 
 type JoinPayload struct {
-	Name     string           `json:"name"`
-	Kind     ParticipantKind  `json:"kind"`
-	AgentID  string           `json:"agent_id,omitempty"` // unique identifier for agents
+	Name    string          `json:"name"`
+	Kind    ParticipantKind `json:"kind"`
+	AgentID string          `json:"agent_id,omitempty"` // unique identifier for agents
 }
 
 type LeavePayload struct {
@@ -95,17 +95,17 @@ type DirectMessagePayload struct {
 }
 
 type AgentInfo struct {
-	Name       string           `json:"name"`
-	Kind       ParticipantKind  `json:"kind"`
-	AgentID    string           `json:"agent_id,omitempty"`
+	Name        string          `json:"name"`
+	Kind        ParticipantKind `json:"kind"`
+	AgentID     string          `json:"agent_id,omitempty"`
 	ConnectedAt time.Time       `json:"connected_at"`
 	LastActive  time.Time       `json:"last_active"`
 }
 
 type AgentListPayload struct {
-	Agents []AgentInfo `json:"agents"`
-	HouseName string   `json:"house_name"`
-	WorkspacePath string `json:"workspace_path"`
+	Agents        []AgentInfo `json:"agents"`
+	HouseName     string      `json:"house_name"`
+	WorkspacePath string      `json:"workspace_path"`
 }
 
 type WorkspaceTreePayload struct {

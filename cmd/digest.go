@@ -123,4 +123,3 @@ func init() {
 
 // Ensure models import is used (referenced in events loop)
 var _ = models.ConnectionEvent{}
-

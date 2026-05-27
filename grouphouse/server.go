@@ -22,13 +22,13 @@ var upgrader = websocket.Upgrader{
 
 // Agent represents a connected participant (housemaster, agent, or guest).
 type Agent struct {
-	Name       string
-	Kind       ParticipantKind
-	AgentID    string
-	Conn       *websocket.Conn
+	Name        string
+	Kind        ParticipantKind
+	AgentID     string
+	Conn        *websocket.Conn
 	ConnectedAt time.Time
 	LastActive  time.Time
-	mu         sync.Mutex
+	mu          sync.Mutex
 }
 
 func (a *Agent) Send(msg Message) error {
@@ -39,8 +39,8 @@ func (a *Agent) Send(msg Message) error {
 
 // Server is the group house WebSocket server.
 type Server struct {
-	name     string
-	port     int
+	name      string
+	port      int
 	workspace *Workspace
 
 	agentsMu sync.RWMutex
@@ -48,7 +48,7 @@ type Server struct {
 
 	housemaster *Agent
 
-	broadcast chan Message
+	broadcast  chan Message
 	register   chan *Agent
 	unregister chan *Agent
 
@@ -405,10 +405,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":   "ok",
-		"house":    s.name,
-		"agents":   count,
-		"uptime":   time.Now().Format(time.RFC3339),
+		"status": "ok",
+		"house":  s.name,
+		"agents": count,
+		"uptime": time.Now().Format(time.RFC3339),
 	})
 }
 

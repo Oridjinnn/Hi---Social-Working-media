@@ -13,16 +13,16 @@ import (
 )
 
 type ProfileModel struct {
-	user         *models.User
-	signals      []models.Signal
-	width        int
-	height       int
-	showOwn      bool
-	username     string
-	cfg          *config.Config
-	editing      bool
-	editCursor   int
-	inputs       []textinput.Model
+	user       *models.User
+	signals    []models.Signal
+	width      int
+	height     int
+	showOwn    bool
+	username   string
+	cfg        *config.Config
+	editing    bool
+	editCursor int
+	inputs     []textinput.Model
 }
 
 func NewProfileModel(user *models.User, signals []models.Signal, showOwn bool, username string, cfg *config.Config) ProfileModel {

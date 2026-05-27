@@ -8,12 +8,11 @@ import (
 	"time"
 )
 
-
 // Cmd wraps an OS command execution for the group house.
 type Cmd struct {
-	Command   string
-	WorkDir   string
-	Timeout   time.Duration
+	Command string
+	WorkDir string
+	Timeout time.Duration
 }
 
 func NewCmd(command, workDir string) *Cmd {

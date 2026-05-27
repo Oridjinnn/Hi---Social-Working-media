@@ -8,12 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Oridjinnn/hi/config"
+	"github.com/Oridjinnn/hi/github"
+	"github.com/Oridjinnn/hi/history"
+	"github.com/Oridjinnn/hi/models"
+	"github.com/Oridjinnn/hi/utils"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Oridjinnn/hi/config"
-	"github.com/Oridjinnn/hi/github"
-	"github.com/Oridjinnn/hi/models"
 )
 
 // ── Message bubble styles ────────────────────────────────────────────────────
@@ -33,18 +35,20 @@ var (
 )
 
 type ChatModel struct {
-	signal     *models.Signal
-	messages   []github.ChatMessage
-	input      textinput.Model
-	client     *github.Client
-	cfg        *config.Config
-	width      int
-	height     int
-	quitting   bool
-	loading    bool
-	msgCount   int
-	limitHit   bool
-	lastPolled time.Time
+	signal      *models.Signal
+	messages    []github.ChatMessage
+	input       textinput.Model
+	client      *github.Client
+	cfg         *config.Config
+	width       int
+	height      int
+	quitting    bool
+	loading     bool
+	msgCount    int
+	limitHit    bool
+	lastPolled  time.Time
+	history     *history.History
+	historyMode bool
 }
 
 func NewChatModel(signal *models.Signal, client *github.Client, cfg *config.Config) *ChatModel {
@@ -52,14 +56,17 @@ func NewChatModel(signal *models.Signal, client *github.Client, cfg *config.Conf
 	ti.Placeholder = "Type a message..."
 	ti.Focus()
 	ti.Width = 80
+	historyData, _ := history.Load()
 	return &ChatModel{
-		signal:     signal,
-		input:      ti,
-		client:     client,
-		cfg:        cfg,
-		loading:    true,
-		msgCount:   loadConnectionCount(signal.ID),
-		lastPolled: time.Now().Add(-1 * time.Hour),
+		signal:      signal,
+		input:       ti,
+		client:      client,
+		cfg:         cfg,
+		loading:     true,
+		msgCount:    loadConnectionCount(signal.ID),
+		lastPolled:  time.Now().Add(-1 * time.Hour),
+		history:     historyData,
+		historyMode: false,
 	}
 }
 
@@ -98,7 +105,22 @@ func (m *ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastPolled = time.Now()
 		m.loading = false
 	case tea.KeyMsg:
+		if m.historyMode {
+			switch msg.String() {
+			case "h", "esc", "q":
+				m.historyMode = false
+				return m, nil
+			case "up", "k":
+				return m, nil
+			case "down", "j":
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
+		case "h":
+			m.historyMode = !m.historyMode
+			return m, nil
 		case "esc", "ctrl+c":
 			m.quitting = true
 			return m, nil
@@ -169,6 +191,10 @@ func saveConnectionCount(signalID int64, count int) {
 }
 
 func (m *ChatModel) View() string {
+	if m.historyMode {
+		return m.renderHistoryView()
+	}
+
 	var b strings.Builder
 
 	// ── Header ─────────────────────────────────────────────────────────────
@@ -213,10 +239,30 @@ func (m *ChatModel) View() string {
 		footer += "\n" + ErrorStyle.Render(fmt.Sprintf("  ⚠ Message limit reached (tier: %s · %d msgs max)", m.cfg.GetTier(), limit))
 		footer += "\n" + CaptionStyle.Render("  Upgrade to Pro for 1,000 msgs: hi upgrade")
 	} else {
-		footer += "\n" + CaptionStyle.Render(fmt.Sprintf("  %s back  %s send", RenderKeyHint("esc"), RenderKeyHint("enter")))
+		footer += "\n" + CaptionStyle.Render(fmt.Sprintf("  %s back  %s send  %s rewind", RenderKeyHint("esc"), RenderKeyHint("enter"), RenderKeyHint("h")))
 	}
 
 	return CardStyle.Width(m.width).Render(lipgloss.JoinVertical(lipgloss.Left, b.String(), footer))
+}
+
+func (m *ChatModel) renderHistoryView() string {
+	header := CardHeaderStyle.Render("⏪ Rewind — Current chat history") + "\n\n"
+	if m.history == nil {
+		return CardStyle.Width(m.width).Render(header + CaptionStyle.Render("  No local history available."))
+	}
+
+	var lines []string
+	for _, chat := range m.history.RecentChatSessions() {
+		if chat.SignalID == m.signal.ID {
+			lines = append(lines, fmt.Sprintf("  • %s — opened %s", chat.Title, utils.TimeAgo(chat.OpenedAt)))
+		}
+	}
+	if len(lines) == 0 {
+		lines = append(lines, "  No rewind history found for this chat yet.")
+	}
+
+	content := header + strings.Join(lines, "\n") + "\n\n" + HelpStyle.Render(fmt.Sprintf("  %s close", RenderKeyHint("h")))
+	return CardStyle.Width(m.width).Render(content)
 }
 
 type chatMessagesMsg struct {

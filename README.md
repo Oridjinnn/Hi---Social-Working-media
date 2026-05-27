@@ -5,6 +5,7 @@ Hi is a lightweight social collaboration CLI application designed for modern kno
 ## Key Features
 
 - Terminal-native interface with fast access to conversations and activity signals
+- Local rewind/history view for visited signals, chat sessions, and grouphouse events
 - Integration with a backend signal service for issues, comments, and notifications
 - Support for authentication and session-based workflows
 - Modular codebase with clear package boundaries for CLI, backend, and UI layers
@@ -42,6 +43,21 @@ go build -o hi .
 ```
 
 This will start the authentication flow and connect the application to the signal backend.
+
+### Rewind and history
+
+- Press `h` in the feed tab to review recently visited signals and chat sessions.
+- Press `h` in the grouphouse tab to see recent workspace events.
+
+### Development
+
+- Run tests: `go test ./...`
+- Format: `gofmt -w .`
+- CI: GitHub Actions runs `gofmt`, `golangci-lint`, `go build`, and `go test` on push/PR to `main`.
+
+### Release
+
+Tag a release (e.g. `v0.1.0`) and CI will build platform binaries and publish a GitHub Release with artifacts.
 
 ## Recommended Repositories
 

@@ -14,15 +14,15 @@ import (
 )
 
 type githubIssue struct {
-	Number    int64      `json:"number"`
-	Title     string     `json:"title"`
-	Body      string     `json:"body"`
-	HTMLURL   string     `json:"html_url"`
-	State     string     `json:"state"`
-	Labels    []ghLabel  `json:"labels"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	User      ghUser     `json:"user"`
+	Number    int64     `json:"number"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	HTMLURL   string    `json:"html_url"`
+	State     string    `json:"state"`
+	Labels    []ghLabel `json:"labels"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	User      ghUser    `json:"user"`
 }
 
 type ghLabel struct {
@@ -36,9 +36,9 @@ type ghUser struct {
 }
 
 type createIssueRequest struct {
-	Title     string   `json:"title"`
-	Body      string   `json:"body"`
-	Labels    []string `json:"labels"`
+	Title  string   `json:"title"`
+	Body   string   `json:"body"`
+	Labels []string `json:"labels"`
 }
 
 func (c *Client) CreateSignal(s *models.Signal) (*models.Signal, error) {
@@ -246,14 +246,14 @@ func buildIssueBody(s *models.Signal) string {
 
 func issueToSignal(issue *githubIssue) *models.Signal {
 	s := &models.Signal{
-		ID:        issue.Number,
-		GitHubURL: issue.HTMLURL,
-		Title:     issue.Title,
-		Body:      issue.Body,
-		CreatedAt: issue.CreatedAt,
-		UpdatedAt: issue.UpdatedAt,
-		Status:    models.SignalStatusOpen,
-		Type:      models.SignalTypeContributor,
+		ID:         issue.Number,
+		GitHubURL:  issue.HTMLURL,
+		Title:      issue.Title,
+		Body:       issue.Body,
+		CreatedAt:  issue.CreatedAt,
+		UpdatedAt:  issue.UpdatedAt,
+		Status:     models.SignalStatusOpen,
+		Type:       models.SignalTypeContributor,
 		Commitment: models.CommitmentCasual,
 		Difficulty: models.DifficultyIntermediate,
 		Author: models.User{
@@ -309,6 +309,7 @@ func parseIssueNumber(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	return strconv.ParseInt(s, 10, 64)
 }
+
 // SearchSignals searches signals by text query and optional label filters.
 // Uses GitHub Issues search API with title/body matching.
 func (c *Client) SearchSignals(textQuery string, labels []string) ([]models.Signal, error) {

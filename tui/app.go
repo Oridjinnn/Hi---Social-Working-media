@@ -381,9 +381,9 @@ func (m AppModel) renderContextHint() string {
 	case TabMarket:
 		return HelpStyle.Render("  " + baseHint + "  ↑/↓ nav  tab focus area  r refresh  e export  p pull model" + freshness)
 	case TabFeed:
-		return HelpStyle.Render("  " + baseHint + "  / search  f filter  n new signal  c connect" + freshness)
+		return HelpStyle.Render("  " + baseHint + "  / search  f filter  n new signal  c connect  h history" + freshness)
 	case TabGroup:
-		return HelpStyle.Render("  " + baseHint + "  grouphouse controls in view" + freshness)
+		return HelpStyle.Render("  " + baseHint + "  grouphouse controls in view  h history" + freshness)
 	case TabHome:
 		fallthrough
 	default:
