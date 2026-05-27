@@ -26,57 +26,73 @@ Hi is a lightweight social collaboration CLI application designed for modern kno
 ### Prerequisites
 
 - Go 1.22+
-- Git
-- GitHub account
+README
 
-### Build
+Hi — Social Working Media
+===================================
+
+Hi is a terminal-first collaboration tool for software teams and knowledge workers. It surfaces signals (short, focused requests), lightweight chat, and shared workspace sessions, with a local Rewind feature that helps you rediscover recent activity.
+
+Why Hi
+------
+- Fast, keyboard-driven TUI built with Bubble Tea and Lip Gloss
+- Local Rewind/history for quick context (signals visited, chat sessions, grouphouse events)
+- Extensible architecture: clear separation between CLI, TUI, backend integrations, and models
+
+Quick Start
+-----------
+Prerequisites
+
+- Go 1.20+ (recommended)
+- Git
+
+Build and run locally
 
 ```bash
 cd /home/habel/Documents/HI/hi
 go build -o hi .
-```
-
-### Run
-
-```bash
 ./hi auth
 ```
 
-This will start the authentication flow and connect the application to the signal backend.
+The `auth` command begins the GitHub authentication flow and configures the client for interacting with the signal backend.
 
-### Rewind and history
+Using Rewind
+------------
+- Press `h` in the Feed tab to view recently opened signals and chat sessions.
+- Press `h` in the GroupHouse tab to review recent workspace events.
 
-- Press `h` in the feed tab to review recently visited signals and chat sessions.
-- Press `h` in the grouphouse tab to see recent workspace events.
-
-### Development
-
-- Run tests: `go test ./...`
-- Format: `gofmt -w .`
+Development
+-----------
+- Run the test suite: `go test ./...`
+- Format code: `gofmt -w .`
 - CI: GitHub Actions runs `gofmt`, `golangci-lint`, `go build`, and `go test` on push/PR to `main`.
 
-### Release
+Repository Layout
+-----------------
+- `cmd/` — CLI commands and entrypoints
+- `tui/` — terminal UI components and application state
+- `github/` — GitHub API client and integrations
+- `grouphouse/` — collaborative workspace server/client code
+- `models/` — domain models (signals, users, events)
+- `history/` — local Rewind/history persistence
+- `config/`, `supabase/`, `utils/`, `notify/` — ancillary support packages
 
-Tag a release (e.g. `v0.1.0`) and CI will build platform binaries and publish a GitHub Release with artifacts.
+Releases
+--------
+Tag a release (for example `v0.1.0`) and the CI release workflow will build binaries and publish a GitHub Release with artifacts.
 
-## Recommended Repositories
-
-- Primary repo: `https://github.com/Oridjinnn/Hi---Social-Working-media`
-- Backend signals repo: `https://github.com/Oridjinnn/hi-signals`
-
-## Notes
-
-- The repository is configured to use `github.com/Oridjinnn/hi` as its Go module path.
-- Keep build artifacts out of version control; only source files should be committed.
-
-## Contributing
-
-Pull requests are welcome. For the cleanest collaboration path:
+Contributing
+------------
+We welcome contributions. Recommended flow:
 
 1. Fork the repository
-2. Create a feature branch
-3. Submit a PR with a clear description of your changes
+2. Create a branch `feature/your-feature`
+3. Open a Pull Request with a clear description and tests where applicable
 
-## License
+License
+-------
+This project is released under an open-source license. Add your chosen license file to the repository.
 
-This project is available under the terms of your chosen open source license.
+Contact
+-------
+For questions or to report issues, open an Issue in the repository or reach out via the project maintainer's GitHub account.
