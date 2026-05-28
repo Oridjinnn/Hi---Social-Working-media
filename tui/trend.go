@@ -58,7 +58,7 @@ type TrendModel struct {
 
 func NewTrendModel(client *github.Client, cfg *config.Config) *TrendModel {
 
-	stacks := []string{}
+	var stacks []string
 	if cfg != nil && len(cfg.Stack) > 0 {
 		stacks = cfg.Stack
 	} else {
@@ -161,7 +161,11 @@ func (m *TrendModel) LoadAsync(signalsFetcher func([]string) ([]models.Signal, e
 		m.data.TopRepos = m.data.TopRepos[:5]
 	}
 
-	m.data.WeeklyDelta = fmt.Sprintf("%s projects trending this week", strings.Title(stacks[0]))
+	name := strings.ToLower(stacks[0])
+	if len(name) > 0 {
+		name = strings.ToUpper(name[:1]) + name[1:]
+	}
+	m.data.WeeklyDelta = fmt.Sprintf("%s projects trending this week", name)
 
 	if signalsFetcher != nil {
 		sigs, _ := signalsFetcher(stacks)
@@ -187,7 +191,9 @@ func fetchTrendingByLanguage(client *github.Client, language string, perPage int
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API error: %s", resp.Status)
 	}

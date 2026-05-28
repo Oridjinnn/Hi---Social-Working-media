@@ -48,7 +48,7 @@ func (w *Workspace) DeleteFile(relativePath string) error {
 
 func (w *Workspace) Tree() []string {
 	var files []string
-	filepath.Walk(w.Path, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(w.Path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -58,7 +58,9 @@ func (w *Workspace) Tree() []string {
 		rel, _ := filepath.Rel(w.Path, path)
 		files = append(files, rel)
 		return nil
-	})
+	}); err != nil {
+		return files
+	}
 	return files
 }
 

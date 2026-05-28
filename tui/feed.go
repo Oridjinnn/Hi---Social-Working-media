@@ -152,7 +152,7 @@ func (d signalDelegate) Render(w io.Writer, m list.Model, index int, listItem li
 		)
 	}
 
-	fmt.Fprint(w, rendered)
+	_, _ = fmt.Fprint(w, rendered)
 }
 
 func renderTrustBadge(rank models.SignalRank) string {
@@ -199,7 +199,6 @@ type FeedModel struct {
 	signals          []models.Signal
 	loading          bool
 	trend            *TrendModel
-	trendLoaded      bool
 	toast            *ToastModel
 	client           *github.Client
 	supaClient       *supabase.Client
@@ -263,7 +262,7 @@ func (i signalItem) FilterValue() string {
 	return fmt.Sprintf("%s %s %s %s", i.signal.Title, i.signal.Type, strings.Join(i.signal.Stack, " "), i.signal.Project)
 }
 
-func NewFeedModel(client *github.Client, supaClient *supabase.Client, cfg *config.Config) FeedModel {
+func NewFeedModel(client *github.Client, supaClient *supabase.Client, cfg *config.Config) *FeedModel {
 	sp := spinner.New()
 	sp.Style = lipgloss.NewStyle().Foreground(PrimaryLight)
 
@@ -291,7 +290,7 @@ func NewFeedModel(client *github.Client, supaClient *supabase.Client, cfg *confi
 
 	historyData, _ := history.Load()
 
-	return FeedModel{
+	return &FeedModel{
 		list:          l,
 		signals:       nil,
 		loading:       true,
@@ -306,7 +305,7 @@ func NewFeedModel(client *github.Client, supaClient *supabase.Client, cfg *confi
 	}
 }
 
-func (m FeedModel) Init() tea.Cmd {
+func (m *FeedModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.spinner.Tick)
 	cmds = append(cmds, m.loadSignals())
@@ -326,7 +325,7 @@ func (m FeedModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	if m.wizard != nil && !m.wizardDone {
@@ -473,7 +472,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.signals) > 0 {
 				idx := m.list.Index()
 				signal := m.signals[idx]
-				utils.OpenURL(signal.GitHubURL)
+				_ = utils.OpenURL(signal.GitHubURL)
 			}
 		case "r":
 			m.loading = true
@@ -616,7 +615,7 @@ func (m FeedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(append(cmds, cmd)...)
 }
 
-func (m FeedModel) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *FeedModel) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -665,7 +664,7 @@ func containsAny(s, substr string) bool {
 	return false
 }
 
-func (m FeedModel) updateFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *FeedModel) updateFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -695,7 +694,7 @@ func (m FeedModel) updateFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m FeedModel) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *FeedModel) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if connectMsg, ok := msg.(ConnectMsg); ok {
 		m.detail = nil
 		c := NewChatModel(connectMsg.Signal, m.client, m.cfg)
@@ -716,7 +715,7 @@ func (m FeedModel) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m FeedModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *FeedModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.chat == nil {
 		return m, nil
 	}
@@ -735,7 +734,7 @@ func (m FeedModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m FeedModel) updateWizard(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *FeedModel) updateWizard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.wizard == nil {
 		return m, nil
 	}
@@ -974,7 +973,7 @@ type historyEntry struct {
 	url      string
 }
 
-func (m FeedModel) openHistoryEntry(entry historyEntry) {
+func (m *FeedModel) openHistoryEntry(entry historyEntry) {
 	if entry.signalID == 0 {
 		return
 	}

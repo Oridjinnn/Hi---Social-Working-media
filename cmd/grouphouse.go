@@ -119,13 +119,13 @@ var grouphouseJoinCmd = &cobra.Command{
 			case grouphouse.MsgBroadcast:
 				var payload grouphouse.BroadcastPayload
 				if data, _ := json.Marshal(msg.Payload); len(data) > 0 {
-					json.Unmarshal(data, &payload)
+					_ = json.Unmarshal(data, &payload)
 				}
 				fmt.Printf("[%s] %s\n", msg.Sender, payload.Text)
 			case grouphouse.MsgRunResult:
 				var payload grouphouse.RunResultPayload
 				if data, _ := json.Marshal(msg.Payload); len(data) > 0 {
-					json.Unmarshal(data, &payload)
+					_ = json.Unmarshal(data, &payload)
 				}
 				fmt.Printf("⚡ %s ran: %s\n", msg.Sender, payload.Command)
 				if payload.Stdout != "" {
@@ -138,13 +138,13 @@ var grouphouseJoinCmd = &cobra.Command{
 			case grouphouse.MsgFileChanged:
 				var payload grouphouse.FileChangedPayload
 				if data, _ := json.Marshal(msg.Payload); len(data) > 0 {
-					json.Unmarshal(data, &payload)
+					_ = json.Unmarshal(data, &payload)
 				}
 				fmt.Printf("📝 %s %s: %s\n", msg.Sender, payload.Action, payload.Path)
 			case grouphouse.MsgAgentList:
 				var payload grouphouse.AgentListPayload
 				if data, _ := json.Marshal(msg.Payload); len(data) > 0 {
-					json.Unmarshal(data, &payload)
+					_ = json.Unmarshal(data, &payload)
 				}
 				fmt.Printf("🏠 House: %s\n", payload.HouseName)
 				fmt.Printf("📁 Workspace: %s\n", payload.WorkspacePath)
@@ -187,24 +187,23 @@ var grouphouseJoinCmd = &cobra.Command{
 			}
 		}()
 
-		for {
-			select {
-			case line := <-scanner:
-				if line == "" {
-					continue
-				}
-				if err := handleClientCommand(client, line); err != nil {
-					fmt.Printf("Error: %v\n", err)
-				}
+		for line := range scanner {
+			if line == "" {
+				continue
+			}
+			if err := handleClientCommand(client, line); err != nil {
+				fmt.Printf("Error: %v\n", err)
 			}
 		}
+
+		return nil
 	},
 }
 
 func handleClientCommand(client *grouphouse.Client, line string) error {
 	switch {
 	case line == "/quit" || line == "/exit":
-		client.Close()
+		_ = client.Close()
 		os.Exit(0)
 		return nil
 

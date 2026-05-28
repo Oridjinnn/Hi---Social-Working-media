@@ -28,10 +28,6 @@ var (
 	otherBubbleStyle = lipgloss.NewStyle().
 				Background(SurfaceAlt).
 				Padding(0, 1, 0, 1)
-
-	systemMsgStyle = lipgloss.NewStyle().
-			Foreground(Muted).
-			Italic(true)
 )
 
 type ChatModel struct {

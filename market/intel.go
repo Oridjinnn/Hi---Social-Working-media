@@ -146,7 +146,9 @@ func fetchTopic(topic AITopic, token string) (*TopicIntel, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == 403 {
 		return nil, fmt.Errorf("GitHub API rate limit hit — set GITHUB_TOKEN for higher limits")
@@ -178,12 +180,16 @@ func fetchTopic(topic AITopic, token string) (*TopicIntel, error) {
 		now.AddDate(0, 0, -7).Unix(),
 	)
 	hnResp, err := http.Get(hnURL)
-	if err == nil && hnResp.StatusCode == 200 {
-		var hn hnSearchResponse
-		if json.NewDecoder(hnResp.Body).Decode(&hn) == nil {
-			intel.HNHits = len(hn.Hits)
+	if err == nil {
+		defer func() {
+			_ = hnResp.Body.Close()
+		}()
+		if hnResp.StatusCode == 200 {
+			var hn hnSearchResponse
+			if err := json.NewDecoder(hnResp.Body).Decode(&hn); err == nil {
+				intel.HNHits = len(hn.Hits)
+			}
 		}
-		hnResp.Body.Close()
 	}
 
 	// Momentum based on new repos + HN hits

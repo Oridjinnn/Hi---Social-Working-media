@@ -61,7 +61,6 @@ type GroupHouseModel struct {
 	log             []ghLogEntry
 	inputActive     bool
 	inputText       string
-	cursor          int
 	recommendations []string
 	pulling         bool
 	availableModels []string
@@ -101,7 +100,7 @@ func detectTotalMemoryMB() uint64 {
 		for _, line := range strings.Split(string(data), "\n") {
 			if strings.HasPrefix(line, "MemTotal:") {
 				var mem uint64
-				fmt.Sscanf(line, "MemTotal: %d kB", &mem)
+				_, _ = fmt.Sscanf(line, "MemTotal: %d kB", &mem)
 				return mem / 1024
 			}
 		}
@@ -111,7 +110,7 @@ func detectTotalMemoryMB() uint64 {
 			return 8000
 		}
 		var mem uint64
-		fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &mem)
+		_, _ = fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &mem)
 		return mem / 1024 / 1024
 	}
 	return 8000
@@ -214,7 +213,7 @@ func (m GroupHouseModel) spawnLocalAgentCmd(modelName string) tea.Cmd {
 				prompt := fmt.Sprintf("Context: You are an AI agent in a shared workspace. User says: %s", msg.Payload.(map[string]interface{})["text"])
 				out, err := exec.Command("ollama", "run", modelName, prompt).Output()
 				if err == nil {
-					client.Broadcast(strings.TrimSpace(string(out)))
+					_ = client.Broadcast(strings.TrimSpace(string(out)))
 				}
 			}
 		}
@@ -257,7 +256,7 @@ func findFreePort(start int) int {
 	for port := start; port < start+100; port++ {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
-			ln.Close()
+			_ = ln.Close()
 			return port
 		}
 	}
@@ -307,12 +306,6 @@ func (m GroupHouseModel) stopServer() tea.Cmd {
 			m.server.Stop()
 		}
 		return nil
-	}
-}
-
-func (m GroupHouseModel) cleanup() {
-	if m.server != nil {
-		m.server.Stop()
 	}
 }
 
@@ -380,7 +373,7 @@ func (m GroupHouseModel) Update(msg tea.Msg) (GroupHouseModel, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		if !m.isRunning || msg.Type != tea.MouseLeft {
+		if !m.isRunning || msg.Button != tea.MouseButtonLeft {
 			return m, nil
 		}
 		if msg.Y > 20 {
@@ -493,10 +486,6 @@ func (m GroupHouseModel) Update(msg tea.Msg) (GroupHouseModel, tea.Cmd) {
 	}
 
 	return m, nil
-}
-
-func (m GroupHouseModel) getAgentsFromLog() []grouphouse.AgentInfo {
-	return m.agents
 }
 
 func (m GroupHouseModel) View() string {

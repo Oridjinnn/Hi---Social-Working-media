@@ -65,7 +65,7 @@ func (c *Client) Connect() error {
 	})
 
 	if err := conn.WriteJSON(join); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("sending join: %w", err)
 	}
 
@@ -83,7 +83,7 @@ func (c *Client) Connect() error {
 
 func (c *Client) readLoop() {
 	defer func() {
-		c.conn.Close()
+		_ = c.conn.Close()
 		if c.OnDisconnected != nil {
 			c.OnDisconnected(nil)
 		}
@@ -94,7 +94,7 @@ func (c *Client) readLoop() {
 		if err := c.conn.ReadJSON(&msg); err != nil {
 			// Suppress stdout/stderr logging to keep BubbleTea TUI intact.
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				// no-op
+				return
 			}
 
 			return
@@ -113,7 +113,7 @@ func (c *Client) pingLoop() {
 		case <-c.done:
 			return
 		case <-ticker.C:
-			c.Send(NewMessage(MsgPing, c.name, c.kind, nil))
+			_ = c.Send(NewMessage(MsgPing, c.name, c.kind, nil))
 		}
 	}
 }
@@ -131,7 +131,9 @@ func (c *Client) handleMessage(msg Message) {
 	case MsgAgentJoined:
 		var info AgentInfo
 		if data, err := json.Marshal(msg.Payload); err == nil {
-			json.Unmarshal(data, &info)
+			if err := json.Unmarshal(data, &info); err != nil {
+				return
+			}
 		}
 		info.Name = msg.Sender
 		if c.OnAgentJoined != nil {
@@ -146,7 +148,9 @@ func (c *Client) handleMessage(msg Message) {
 	case MsgFileChanged:
 		var payload FileChangedPayload
 		if data, err := json.Marshal(msg.Payload); err == nil {
-			json.Unmarshal(data, &payload)
+			if err := json.Unmarshal(data, &payload); err != nil {
+				return
+			}
 		}
 		if c.OnFileChanged != nil {
 			c.OnFileChanged(payload)
@@ -155,7 +159,9 @@ func (c *Client) handleMessage(msg Message) {
 	case MsgRunResult:
 		var payload RunResultPayload
 		if data, err := json.Marshal(msg.Payload); err == nil {
-			json.Unmarshal(data, &payload)
+			if err := json.Unmarshal(data, &payload); err != nil {
+				return
+			}
 		}
 		if c.OnRunResult != nil {
 			c.OnRunResult(payload)
@@ -174,7 +180,9 @@ func (c *Client) handleMessage(msg Message) {
 	case MsgError:
 		var payload ErrorPayload
 		if data, err := json.Marshal(msg.Payload); err == nil {
-			json.Unmarshal(data, &payload)
+			if err := json.Unmarshal(data, &payload); err != nil {
+				return
+			}
 		}
 		if c.OnError != nil {
 			c.OnError(payload)

@@ -36,7 +36,7 @@ var tabBadgeCounts = []int{0, 0, 0, 0}
 type AppModel struct {
 	activeTab   Tab
 	profile     ProfileModel
-	feed        FeedModel
+	feed        *FeedModel
 	group       GroupHouseModel
 	market      MarketModel
 	lastUpdated map[Tab]time.Time
@@ -114,7 +114,7 @@ func (m AppModel) Update(msg tea.Msg) (resModel tea.Model, resCmd tea.Cmd) {
 		cmds = append(cmds, pCmd)
 
 		feedUpdated, fCmd := m.feed.Update(adjustedMsg)
-		if fm, ok := feedUpdated.(FeedModel); ok {
+		if fm, ok := feedUpdated.(*FeedModel); ok {
 			m.feed = fm
 		}
 		cmds = append(cmds, fCmd)
@@ -162,7 +162,7 @@ func (m AppModel) Update(msg tea.Msg) (resModel tea.Model, resCmd tea.Cmd) {
 	switch msg.(type) {
 	case signalsLoadedMsg, trendLoadedMsg, errorMsg, toastMsg, toastDismissMsg, chatMessagesMsg, chatTickMsg, realtimeBridgeEventMsg, realtimeBridgeStatusMsg:
 		fUpdated, fCmd := m.feed.Update(msg)
-		if fm, ok := fUpdated.(FeedModel); ok {
+		if fm, ok := fUpdated.(*FeedModel); ok {
 			m.feed = fm
 		}
 		if _, ok := msg.(signalsLoadedMsg); ok {
@@ -196,7 +196,7 @@ func (m AppModel) Update(msg tea.Msg) (resModel tea.Model, resCmd tea.Cmd) {
 			cmds = append(cmds, c)
 		case TabFeed:
 			feedUpdated, c := m.feed.Update(msg)
-			if fm, ok := feedUpdated.(FeedModel); ok {
+			if fm, ok := feedUpdated.(*FeedModel); ok {
 				m.feed = fm
 			}
 			m.touchTab(TabFeed, time.Now())

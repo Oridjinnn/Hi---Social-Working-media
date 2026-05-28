@@ -125,7 +125,10 @@ func MigrateTokenFromConfig(cfg *Config) error {
 
 // ValidateAuth checks credential presence, storage hygiene, and token validity.
 func ValidateAuth(cfg *Config) AuthReport {
-	report := AuthReport{Level: AuthOK, Username: cfg.GitHubUsername}
+	report := AuthReport{Level: AuthOK}
+	if cfg != nil {
+		report.Username = cfg.GitHubUsername
+	}
 
 	storageIssues, storageHints := AuditTokenStorage(cfg)
 	report.Issues = append(report.Issues, storageIssues...)
@@ -171,7 +174,9 @@ func validateGitHubToken(token string) error {
 	if err != nil {
 		return fmt.Errorf("validating GitHub token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf("GitHub rejected the stored token (unauthorized)")

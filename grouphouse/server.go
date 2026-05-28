@@ -99,7 +99,7 @@ func (s *Server) Start() error {
 // Stop gracefully shuts down the server.
 func (s *Server) Stop() {
 	if s.httpServer != nil {
-		s.httpServer.Close()
+		_ = s.httpServer.Close()
 	}
 }
 
@@ -124,12 +124,7 @@ func (s *Server) run() {
 			s.broadcastToAll(joinMsg)
 
 			// Send the current agent list to the new participant
-			s.sendAgentList(agent)
-
-			// Log the event
-			s.logEvent(joinMsg)
-
-		case agent := <-s.unregister:
+			_ = s.sendAgentList(agent)
 			s.agentsMu.Lock()
 			delete(s.agents, agent.Name)
 			if s.housemaster == agent {
@@ -150,9 +145,7 @@ func (s *Server) run() {
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
-		if r := recover(); r != nil {
-			// Connection cleanup handled by net/http
-		}
+		_ = recover()
 	}()
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -164,19 +157,22 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	var joinMsg Message
 	if err := conn.ReadJSON(&joinMsg); err != nil {
 		// No stdout/stderr logging in TUI mode.
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
 	if joinMsg.Type != MsgJoin {
 		sendError(conn, 400, "first message must be a join")
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
 	payloadBytes, _ := json.Marshal(joinMsg.Payload)
 	var join JoinPayload
-	json.Unmarshal(payloadBytes, &join)
+	if err := json.Unmarshal(payloadBytes, &join); err != nil {
+		_ = conn.Close()
+		return
+	}
 
 	agent := &Agent{
 		Name:        join.Name,
@@ -190,7 +186,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Validate
 	if join.Name == "" {
 		sendError(conn, 400, "name is required")
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
@@ -200,7 +196,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.agentsMu.RUnlock()
 	if exists {
 		sendError(conn, 409, fmt.Sprintf("name '%s' is already taken", join.Name))
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
@@ -222,12 +218,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		HouseName:     s.name,
 		WorkspacePath: s.workspace.Path,
 	})
-	agent.Send(welcome)
+	_ = agent.Send(welcome)
 
 	// Main message loop
 	defer func() {
 		s.unregister <- agent
-		conn.Close()
+		_ = conn.Close()
 	}()
 
 	for {
@@ -235,7 +231,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if err := conn.ReadJSON(&msg); err != nil {
 			// Suppress websocket error logs to avoid corrupting the TUI output.
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				// no-op
+				return
 			}
 			break
 		}
@@ -264,9 +260,9 @@ func (s *Server) handleMessage(sender *Agent, msg Message) error {
 	case MsgDirectMessage:
 		var payload DirectMessagePayload
 		payloadBytes, _ := json.Marshal(msg.Payload)
-		json.Unmarshal(payloadBytes, &payload)
-
-		s.agentsMu.RLock()
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return fmt.Errorf("invalid direct message payload: %w", err)
+		}
 		target, ok := s.agents[payload.Target]
 		s.agentsMu.RUnlock()
 
@@ -282,11 +278,11 @@ func (s *Server) handleMessage(sender *Agent, msg Message) error {
 	case MsgFileWrite:
 		var payload FileWritePayload
 		payloadBytes, _ := json.Marshal(msg.Payload)
-		json.Unmarshal(payloadBytes, &payload)
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return fmt.Errorf("invalid file write payload: %w", err)
+		}
 
-		_, err := s.workspace.WriteFile(payload.Path, payload.Content)
-		if err != nil {
-
+		if _, err := s.workspace.WriteFile(payload.Path, payload.Content); err != nil {
 			return sender.Send(NewMessage(MsgError, "system", KindHousemaster, ErrorPayload{
 				Code:    500,
 				Message: fmt.Sprintf("write error: %v", err),
@@ -303,7 +299,9 @@ func (s *Server) handleMessage(sender *Agent, msg Message) error {
 	case MsgFileRead:
 		var payload FileReadPayload
 		payloadBytes, _ := json.Marshal(msg.Payload)
-		json.Unmarshal(payloadBytes, &payload)
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return fmt.Errorf("invalid file read payload: %w", err)
+		}
 
 		content, err := s.workspace.ReadFile(payload.Path)
 		if err != nil {
@@ -321,7 +319,9 @@ func (s *Server) handleMessage(sender *Agent, msg Message) error {
 	case MsgRun:
 		var payload RunPayload
 		payloadBytes, _ := json.Marshal(msg.Payload)
-		json.Unmarshal(payloadBytes, &payload)
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return fmt.Errorf("invalid run payload: %w", err)
+		}
 
 		start := time.Now()
 		stdout, stderr, exitCode, _ := s.workspace.Run(payload.Command)
@@ -356,7 +356,7 @@ func (s *Server) broadcastToAll(msg Message) {
 	defer s.agentsMu.RUnlock()
 
 	for _, agent := range s.agents {
-		agent.Send(msg)
+		_ = agent.Send(msg)
 	}
 }
 
@@ -404,7 +404,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.agentsMu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "ok",
 		"house":  s.name,
 		"agents": count,
@@ -417,5 +417,5 @@ func sendError(conn *websocket.Conn, code int, message string) {
 		Code:    code,
 		Message: message,
 	})
-	conn.WriteJSON(msg)
+	_ = conn.WriteJSON(msg)
 }

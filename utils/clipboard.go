@@ -41,7 +41,7 @@ func CopyToClipboard(text string) error {
 	if _, err := exec.LookPath("termux-clipboard-set"); err == nil {
 		cmd := exec.Command("termux-clipboard-set")
 		cmd.Stdin = strings.NewReader(text)
-		cmd.Run() // best-effort
+		_ = cmd.Run() // best-effort
 	}
 
 	return nil // silently ignore — clipboard is best-effort

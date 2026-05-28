@@ -248,9 +248,7 @@ func (m *WizardModel) submit() tea.Cmd {
 		}
 
 		if m.supaClient != nil {
-			if err := m.supaClient.UpsertUser(m.cfgUsername); err != nil {
-				// non-fatal
-			}
+			_ = m.supaClient.UpsertUser(m.cfgUsername)
 		}
 
 		if m.cfg != nil && len(m.cfg.Stack) == 0 {

@@ -20,19 +20,19 @@ var (
 func main() {
 	// Set environment variables from build-time values if not already set
 	if v := os.Getenv("HI_GITHUB_CLIENT_ID"); v == "" && GitHubClientID != "" {
-		os.Setenv("HI_GITHUB_CLIENT_ID", GitHubClientID)
+		_ = os.Setenv("HI_GITHUB_CLIENT_ID", GitHubClientID)
 	}
 	if v := os.Getenv("HI_SUPABASE_URL"); v == "" && SupabaseURL != "" {
-		os.Setenv("HI_SUPABASE_URL", SupabaseURL)
+		_ = os.Setenv("HI_SUPABASE_URL", SupabaseURL)
 	}
 	if v := os.Getenv("HI_SUPABASE_ANON_KEY"); v == "" && SupabaseAnonKey != "" {
-		os.Setenv("HI_SUPABASE_ANON_KEY", SupabaseAnonKey)
+		_ = os.Setenv("HI_SUPABASE_ANON_KEY", SupabaseAnonKey)
 	}
 	if v := os.Getenv("HI_SIGNAL_REPO_OWNER"); v == "" && SignalRepoOwner != "" {
-		os.Setenv("HI_SIGNAL_REPO_OWNER", SignalRepoOwner)
+		_ = os.Setenv("HI_SIGNAL_REPO_OWNER", SignalRepoOwner)
 	}
 	if v := os.Getenv("HI_SIGNAL_REPO_NAME"); v == "" && SignalRepoName != "" {
-		os.Setenv("HI_SIGNAL_REPO_NAME", SignalRepoName)
+		_ = os.Setenv("HI_SIGNAL_REPO_NAME", SignalRepoName)
 	}
 
 	fmt.Printf("HI v%s — Connect developers via structured intent signals\n\n", Version)

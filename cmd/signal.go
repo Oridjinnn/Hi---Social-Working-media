@@ -249,7 +249,7 @@ func parseIssueNumber(s string) (int64, error) {
 	s = strings.TrimPrefix(s, "#")
 	s = strings.TrimSpace(s)
 	var num int64
-	fmt.Sscanf(s, "%d", &num)
+	_, _ = fmt.Sscanf(s, "%d", &num)
 	if num == 0 {
 		return 0, fmt.Errorf("could not parse issue number from: %s", s)
 	}

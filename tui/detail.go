@@ -12,11 +12,10 @@ import (
 )
 
 type DetailModel struct {
-	signal      *models.Signal
-	width       int
-	height      int
-	showConnect bool
-	quitting    bool
+	signal   *models.Signal
+	width    int
+	height   int
+	quitting bool
 }
 
 func NewDetailModel(signal *models.Signal) *DetailModel {
@@ -41,7 +40,7 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "right", "enter", "o":
 			if m.signal != nil {
-				utils.OpenURL(m.signal.GitHubURL)
+				_ = utils.OpenURL(m.signal.GitHubURL)
 			}
 		case "c":
 			if m.signal != nil {

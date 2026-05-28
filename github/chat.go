@@ -35,7 +35,9 @@ func (c *Client) PostComment(signalID int64, body string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("github api error: %s", resp.Status)
@@ -60,7 +62,9 @@ func (c *Client) PollComments(signalID int64, since time.Time) ([]ChatMessage, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var ghComments []struct {
 		User      struct{ Login string } `json:"user"`
@@ -93,7 +97,9 @@ func (c *Client) ListComments(signalID int64) ([]ChatMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var ghComments []struct {
 		User      struct{ Login string } `json:"user"`

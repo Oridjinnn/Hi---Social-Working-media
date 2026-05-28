@@ -60,8 +60,8 @@ var authLogoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Logout and remove stored credentials",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		os.Remove(config.TokenPath())
-		os.Remove(config.ConfigPath())
+		_ = os.Remove(config.TokenPath())
+		_ = os.Remove(config.ConfigPath())
 		fmt.Println("Logged out.")
 		return nil
 	},
@@ -156,8 +156,8 @@ func loginGitHub() error {
 	// Step 1: Request device code
 	deviceReq, err := http.NewRequest("POST", "https://github.com/login/device/code",
 		strings.NewReader(url.Values{
-			"client_id": {clientID},
-			"scope":     {"public_repo read:user"},
+			"client_id": []string{clientID},
+			"scope":     []string{"public_repo read:user"},
 		}.Encode()))
 	if err != nil {
 		return fmt.Errorf("creating device code request: %w", err)
@@ -169,7 +169,9 @@ func loginGitHub() error {
 	if err != nil {
 		return fmt.Errorf("requesting device code: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var deviceCode deviceCodeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&deviceCode); err != nil {
@@ -177,10 +179,10 @@ func loginGitHub() error {
 	}
 
 	// Auto-copy code to clipboard
-	utils.CopyToClipboard(deviceCode.UserCode)
+	_ = utils.CopyToClipboard(deviceCode.UserCode)
 
 	// Open browser
-	utils.OpenURL(deviceCode.VerificationURI)
+	_ = utils.OpenURL(deviceCode.VerificationURI)
 
 	// Step 2: Poll for access token via TUI
 	token, err := pollForToken(clientID, deviceCode)
@@ -203,7 +205,9 @@ func loginGitHub() error {
 	if err != nil {
 		return fmt.Errorf("fetching user: %w", err)
 	}
-	defer resp2.Body.Close()
+	defer func() {
+		_ = resp2.Body.Close()
+	}()
 
 	var ghUser githubUserResponse
 	if err := json.NewDecoder(resp2.Body).Decode(&ghUser); err != nil {
@@ -291,9 +295,9 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 
 			tokenReq, err := http.NewRequest("POST", "https://github.com/login/oauth/access_token",
 				strings.NewReader(url.Values{
-					"client_id":   {clientID},
-					"device_code": {deviceCode.DeviceCode},
-					"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
+					"client_id":   []string{clientID},
+					"device_code": []string{deviceCode.DeviceCode},
+					"grant_type":  []string{"urn:ietf:params:oauth:grant-type:device_code"},
 				}.Encode()))
 			if err != nil {
 				resultCh <- pollResult{err: fmt.Errorf("creating token request: %w", err)}
@@ -309,12 +313,13 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 			}
 
 			var tokenResp accessTokenResponse
+			defer func() {
+				_ = resp.Body.Close()
+			}()
 			if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-				resp.Body.Close()
 				resultCh <- pollResult{err: fmt.Errorf("decoding token response: %w", err)}
 				return
 			}
-			resp.Body.Close()
 
 			if tokenResp.AccessToken != "" {
 				token = tokenResp.AccessToken

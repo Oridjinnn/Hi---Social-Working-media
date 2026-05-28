@@ -45,7 +45,7 @@ func (c *Cmd) Run() (string, string, int, error) {
 	if c.Timeout > 0 {
 		timer := time.AfterFunc(c.Timeout, func() {
 			if cmd.Process != nil {
-				cmd.Process.Kill()
+				_ = cmd.Process.Kill()
 			}
 		})
 		defer timer.Stop()

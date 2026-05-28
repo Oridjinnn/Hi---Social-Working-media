@@ -20,7 +20,9 @@ func (c *Client) LogConnectionEvent(e *models.ConnectionEvent) error {
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("Supabase API error: %s", resp.Status)
@@ -43,7 +45,9 @@ func (c *Client) LogViewEvent(signalID int64, viewer string) error {
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("Supabase API error: %s", resp.Status)
@@ -62,7 +66,9 @@ func (c *Client) GetPendingNotifications(username string) ([]models.ConnectionEv
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("Supabase API error: %s", resp.Status)
@@ -91,7 +97,9 @@ func (c *Client) UpdateOutcome(eventID string, outcome models.OutcomeType) error
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("Supabase API error: %s", resp.Status)
@@ -110,7 +118,9 @@ func (c *Client) GetUserStats(username string) (connectionCount, successCount in
 	if err != nil {
 		return 0, 0, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, 0, fmt.Errorf("Supabase API error: %s", resp.Status)
@@ -146,7 +156,9 @@ func (c *Client) UpsertUser(username string) error {
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 300 && !strings.Contains(resp.Status, "201") && !strings.Contains(resp.Status, "200") {
 		return fmt.Errorf("Supabase API error: %s", resp.Status)

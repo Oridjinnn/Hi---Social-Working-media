@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -68,7 +67,9 @@ func (c *Client) CreateSignal(s *models.Signal) (*models.Signal, error) {
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("GitHub API error creating issue: %s", resp.Status)
@@ -97,7 +98,9 @@ func (c *Client) ListSignals(labels []string, page int) ([]models.Signal, error)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API error: %s", resp.Status)
@@ -126,7 +129,9 @@ func (c *Client) GetSignal(issueNumber int64) (*models.Signal, error) {
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API error: %s", resp.Status)
@@ -175,7 +180,9 @@ func (c *Client) AddConnectionComment(issueNumber int64, username string) error 
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("GitHub API error adding comment: %s", resp.Status)
@@ -198,7 +205,9 @@ func (c *Client) updateIssue(issueNumber int64, body map[string]interface{}) err
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("GitHub API error: %s", resp.Status)
@@ -304,12 +313,6 @@ func issueToSignal(issue *githubIssue) *models.Signal {
 	return s
 }
 
-func parseIssueNumber(s string) (int64, error) {
-	s = strings.TrimPrefix(s, "#")
-	s = strings.TrimSpace(s)
-	return strconv.ParseInt(s, 10, 64)
-}
-
 // SearchSignals searches signals by text query and optional label filters.
 // Uses GitHub Issues search API with title/body matching.
 func (c *Client) SearchSignals(textQuery string, labels []string) ([]models.Signal, error) {
@@ -332,7 +335,9 @@ func (c *Client) SearchSignals(textQuery string, labels []string) ([]models.Sign
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API error: %s", resp.Status)
