@@ -280,7 +280,9 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 	// Start TUI
 	p := tea.NewProgram(tui.NewAuthModel(deviceCode.UserCode, deviceCode.VerificationURI))
 
-	// Channel to receive result
+	// Shared result — goroutine 2 writes it, then p.Run() returns, then we read it.
+	// Using a channel to synchronize: write happens before p.Run() returns because
+	// the TUI model quits in response to the AuthSuccessMsg/AuthErrMsg sent by goroutine 2.
 	type pollResult struct {
 		token string
 		err   error
@@ -289,9 +291,11 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 
 	// Poll in background
 	go func() {
-		var token string
 		for i := 0; i < deviceCode.ExpiresIn/interval; i++ {
-			time.Sleep(time.Duration(interval) * time.Second)
+			// On subsequent iterations, wait before polling
+			if i > 0 {
+				time.Sleep(time.Duration(interval) * time.Second)
+			}
 
 			tokenReq, err := http.NewRequest("POST", "https://github.com/login/oauth/access_token",
 				strings.NewReader(url.Values{
@@ -322,8 +326,7 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 			}
 
 			if tokenResp.AccessToken != "" {
-				token = tokenResp.AccessToken
-				resultCh <- pollResult{token: token}
+				resultCh <- pollResult{token: tokenResp.AccessToken}
 				return
 			}
 
@@ -340,14 +343,15 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 			}
 		}
 
-		resultCh <- pollResult{err: fmt.Errorf("authentication timed out. Please try again")}
+		resultCh <- pollResult{err: fmt.Errorf("authentication timed out")}
 	}()
 
-	// Run TUI until result or quit
+	// Forward poll result to TUI — this goroutine reads exactly once from resultCh.
+	// After sending the message to the TUI, the TUI quits and p.Run() returns.
 	go func() {
 		result := <-resultCh
 		if result.token != "" {
-			p.Send(tui.AuthSuccessMsg{Username: "fetching..."}) // placeholder, will query API
+			p.Send(tui.AuthSuccessMsg{Username: "fetching..."})
 		} else if result.err != nil {
 			p.Send(tui.AuthErrMsg{Err: result.err})
 		}
@@ -357,7 +361,9 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 		return "", err
 	}
 
-	// Check result channel
+	// The second read from resultCh blocks if goroutine 2 already consumed it
+	// (normal case — poll completed, TUI showed result, TUI quit).
+	// If resultCh is empty (user quit TUI before poll finished), the default case fires.
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
@@ -365,7 +371,7 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 		}
 		return result.token, nil
 	default:
-		// TUI was quit by user
+		// TUI was quit by user before the poll completed
 		return "", fmt.Errorf("login cancelled")
 	}
 }

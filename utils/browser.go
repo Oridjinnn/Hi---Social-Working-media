@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 )
@@ -15,7 +16,15 @@ func OpenURL(url string) error {
 	case "darwin":
 		err = exec.Command("open", url).Start()
 	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		// Method 1: start (most reliable on modern Windows)
+		if e := exec.Command("cmd", "/c", "start", "", url).Start(); e == nil {
+			return nil
+		}
+		// Method 2: rundll32 (legacy, still works on some configs)
+		if e := exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start(); e == nil {
+			return nil
+		}
+		err = fmt.Errorf("could not open browser on Windows")
 	default: // linux
 		err = tryOpenLinux(url)
 	}
@@ -24,11 +33,11 @@ func OpenURL(url string) error {
 		return nil
 	}
 
-	// Fallback: print the URL
-	fmt.Println()
-	fmt.Println("  Open this URL in your browser:")
-	fmt.Printf("  \033[36m%s\033[0m\n", url)
-	fmt.Println()
+	// Fallback: print the URL to stderr (visible even inside TUI alt screen)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "  Open this URL in your browser:")
+	fmt.Fprintf(os.Stderr, "  \033[36m%s\033[0m\n", url)
+	fmt.Fprintln(os.Stderr)
 	return nil
 }
 
