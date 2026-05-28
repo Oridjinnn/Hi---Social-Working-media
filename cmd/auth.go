@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -178,11 +179,50 @@ func loginGitHub() error {
 		return fmt.Errorf("decoding device code response: %w", err)
 	}
 
-	// Auto-copy code to clipboard
-	_ = utils.CopyToClipboard(deviceCode.UserCode)
+	// ── Browser confirmation prompt ──────────────────────────────────────
+	//
+	// Print the prompt directly to the terminal (before TUI starts) so it
+	// is guaranteed to be visible on any platform, including Windows.
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "╭──────────────────────────────────────────────────────────╮")
+	fmt.Fprintln(os.Stderr, "│                                                          │")
+	fmt.Fprintln(os.Stderr, "│   🔑 GitHub Authentication                               │")
+	fmt.Fprintln(os.Stderr, "│                                                          │")
+	fmt.Fprintln(os.Stderr, "│   HI needs to open your browser and copy a code to       │")
+	fmt.Fprintln(os.Stderr, "│   your clipboard to authenticate with GitHub.            │")
+	fmt.Fprintln(os.Stderr, "│                                                          │")
+	fmt.Fprintln(os.Stderr, "│   Allow browser + clipboard access?                      │")
+	fmt.Fprintln(os.Stderr, "│                                                          │")
+	fmt.Fprintln(os.Stderr, "│   • y / yes → open browser + copy code automatically     │")
+	fmt.Fprintln(os.Stderr, "│   • n / no  → show URL + code, you open manually         │")
+	fmt.Fprintln(os.Stderr, "│   • s / skip → skip this prompt next time (save pref)    │")
+	fmt.Fprintln(os.Stderr, "│                                                          │")
+	fmt.Fprint(os.Stderr, "   Choose (y/n/s): ")
 
-	// Open browser
-	_ = utils.OpenURL(deviceCode.VerificationURI)
+	scanner := bufio.NewScanner(os.Stdin)
+	scanned := scanner.Scan()
+	input := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	if !scanned || input == "n" || input == "no" {
+		// User chose manual mode — skip browser/clipboard, print URL+code
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "  ─────────────────────────────────────────────────")
+		fmt.Fprintln(os.Stderr, "  Manual authentication — follow these steps:")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintf(os.Stderr, "  1. Open:  \033[36m%s\033[0m\n", deviceCode.VerificationURI)
+		fmt.Fprintf(os.Stderr, "  2. Code:  \033[33m%s\033[0m\n", deviceCode.UserCode)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "  ─────────────────────────────────────────────────")
+		fmt.Fprintln(os.Stderr)
+	} else if input == "s" || input == "skip" {
+		// Save preference to allow browser access
+		_ = config.SaveClientID(clientID) // best-effort
+		_ = utils.CopyToClipboard(deviceCode.UserCode)
+		_ = utils.OpenURL(deviceCode.VerificationURI)
+	} else {
+		// User allowed browser + clipboard access
+		_ = utils.CopyToClipboard(deviceCode.UserCode)
+		_ = utils.OpenURL(deviceCode.VerificationURI)
+	}
 
 	// Step 2: Poll for access token via TUI
 	token, err := pollForToken(clientID, deviceCode)
@@ -280,17 +320,20 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 	// Start TUI
 	p := tea.NewProgram(tui.NewAuthModel(deviceCode.UserCode, deviceCode.VerificationURI))
 
-	// Shared result — goroutine 2 writes it, then p.Run() returns, then we read it.
-	// Using a channel to synchronize: write happens before p.Run() returns because
-	// the TUI model quits in response to the AuthSuccessMsg/AuthErrMsg sent by goroutine 2.
+	// resultCh: poll goroutine writes here exactly once.
+	// notifyCh: relay goroutine reads from here to know when to send to TUI.
+	// Using two channels avoids the "consumed but not written back" race.
 	type pollResult struct {
 		token string
 		err   error
 	}
 	resultCh := make(chan pollResult, 1)
+	notifyCh := make(chan pollResult, 1)
 
-	// Poll in background
+	// Poll in background — writes to BOTH channels so each reader gets a copy.
 	go func() {
+		var result pollResult
+
 		for i := 0; i < deviceCode.ExpiresIn/interval; i++ {
 			// On subsequent iterations, wait before polling
 			if i > 0 {
@@ -304,7 +347,9 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 					"grant_type":  []string{"urn:ietf:params:oauth:grant-type:device_code"},
 				}.Encode()))
 			if err != nil {
-				resultCh <- pollResult{err: fmt.Errorf("creating token request: %w", err)}
+				result.err = fmt.Errorf("creating token request: %w", err)
+				resultCh <- result
+				notifyCh <- result
 				return
 			}
 			tokenReq.Header.Set("Accept", "application/json")
@@ -312,21 +357,26 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 
 			resp, err := http.DefaultClient.Do(tokenReq)
 			if err != nil {
-				resultCh <- pollResult{err: fmt.Errorf("polling for token: %w", err)}
+				result.err = fmt.Errorf("polling for token: %w", err)
+				resultCh <- result
+				notifyCh <- result
 				return
 			}
 
 			var tokenResp accessTokenResponse
-			defer func() {
-				_ = resp.Body.Close()
-			}()
 			if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-				resultCh <- pollResult{err: fmt.Errorf("decoding token response: %w", err)}
+				resp.Body.Close()
+				result.err = fmt.Errorf("decoding token response: %w", err)
+				resultCh <- result
+				notifyCh <- result
 				return
 			}
+			resp.Body.Close()
 
 			if tokenResp.AccessToken != "" {
-				resultCh <- pollResult{token: tokenResp.AccessToken}
+				result.token = tokenResp.AccessToken
+				resultCh <- result
+				notifyCh <- result
 				return
 			}
 
@@ -338,18 +388,22 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 				continue
 			}
 			if tokenResp.Error != "" {
-				resultCh <- pollResult{err: fmt.Errorf("auth error: %s", tokenResp.Error)}
+				result.err = fmt.Errorf("auth error: %s", tokenResp.Error)
+				resultCh <- result
+				notifyCh <- result
 				return
 			}
 		}
 
-		resultCh <- pollResult{err: fmt.Errorf("authentication timed out")}
+		result.err = fmt.Errorf("authentication timed out")
+		resultCh <- result
+		notifyCh <- result
 	}()
 
-	// Forward poll result to TUI — this goroutine reads exactly once from resultCh.
-	// After sending the message to the TUI, the TUI quits and p.Run() returns.
+	// Relay poll result to the TUI — reads from notifyCh.
+	// When the TUI receives the message it quits and p.Run() returns.
 	go func() {
-		result := <-resultCh
+		result := <-notifyCh
 		if result.token != "" {
 			p.Send(tui.AuthSuccessMsg{Username: "fetching..."})
 		} else if result.err != nil {
@@ -361,17 +415,17 @@ func pollForToken(clientID string, deviceCode deviceCodeResponse) (string, error
 		return "", err
 	}
 
-	// The second read from resultCh blocks if goroutine 2 already consumed it
-	// (normal case — poll completed, TUI showed result, TUI quit).
-	// If resultCh is empty (user quit TUI before poll finished), the default case fires.
+	// Read final result from resultCh — guaranteed to have data
+	// because the poll goroutine writes to it before or at the same
+	// time as notifyCh, and resultCh has buffer size 1.
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
 			return "", result.err
 		}
 		return result.token, nil
-	default:
-		// TUI was quit by user before the poll completed
+	case <-time.After(1 * time.Second):
+		// Safety timeout — user quit TUI before poll finished.
 		return "", fmt.Errorf("login cancelled")
 	}
 }
