@@ -1,3 +1,55 @@
+# HI — Social Working Media (local build instructions)
+
+This repository builds a multi-platform CLI/TUI. The project provides helper scripts to build binaries for Linux, macOS (darwin) and Windows.
+
+Build (bash - Linux/macOS):
+
+```bash
+# build all targets (linux, darwin, windows) for amd64
+./scripts/build.sh all amd64
+
+# build only for macOS (darwin) arm64
+./scripts/build.sh darwin arm64
+
+# build only for current host
+./scripts/build.sh
+```
+
+Build (PowerShell - Windows):
+
+```powershell
+# from repo root in PowerShell
+.
+# build default (all targets, amd64)
+.
+\scripts\build.ps1 -Target windows -Arch amd64
+
+# or build everything
+.
+\scripts\build.ps1 -Target all -Arch amd64
+```
+
+Running the binary
+
+- On macOS / Linux (bash / zsh):
+
+```bash
+./bin/hi-darwin-amd64  # example
+./bin/hi-linux-amd64 auth
+```
+
+- On Windows (CMD / PowerShell):
+
+```bat
+.\bin\hi-windows-amd64.exe auth
+```
+
+Notes
+- Windows `CMD` does not recognize `./hi` or `.` as a command. Use `hi.exe` or `.
+hi.exe` in PowerShell/CMD.
+- If you prefer a single `hi.exe` in the repo root, run `go build -o hi.exe .` in the repository root.
+
+If you want, I can add a Makefile, GitHub Actions workflow for cross-platform builds, or add a single `hi.exe` placed into `bin/` by default. Which would you like next?
 # 💬 Hi — Social Working Media
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Oridjinnn/Hi---Social-Working-media)](https://golang.org/)
