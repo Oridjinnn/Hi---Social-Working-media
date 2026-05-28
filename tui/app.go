@@ -177,7 +177,7 @@ func (m AppModel) Update(msg tea.Msg) (resModel tea.Model, resCmd tea.Cmd) {
 			m.touchTab(TabFeed, time.Now())
 		}
 		cmds = append(cmds, fCmd)
-	case marketLoadedMsg, marketErrMsg:
+	case marketLoadedMsg, marketErrMsg, marketModelsLoadedMsg, marketAnalysisMsg, marketPullDoneMsg:
 		marketUpdated, mCmd := m.market.Update(msg)
 		m.market = marketUpdated
 		m.touchTab(TabMarket, time.Now())
