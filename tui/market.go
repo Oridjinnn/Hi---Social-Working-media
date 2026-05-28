@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"os/exec"
 
@@ -27,6 +29,9 @@ var (
 
 	marketStarStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24"))
 	marketHNStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#F97316"))
+
+	scrollIndicatorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#6B7280")).Italic(true)
 )
 
 // ── Sparkline ────────────────────────────────────────────────────────────────
@@ -57,6 +62,11 @@ func topicSparkValues(intel market.TopicIntel) []int {
 	return []int{intel.NewRepos, intel.HNHits / 2, intel.TotalStars / 5000}
 }
 
+// Models known to work well for sentiment/analysis — ordered by preference.
+var preferredAnalysisModels = []string{
+	"phi3", "phi4", "llama3.2", "llama3", "qwen2.5", "mistral", "gemma2", "gemma", "codellama", "tinyllama",
+}
+
 // ── MarketModel ───────────────────────────────────────────────────────────────
 
 type marketLoadedMsg struct{ report *market.MarketReport }
@@ -67,6 +77,7 @@ type marketArea int
 const (
 	areaTrends marketArea = iota
 	areaOpportunities
+	areaAnalysis
 )
 
 type Opportunity struct {
@@ -78,6 +89,16 @@ type Opportunity struct {
 	Velocity  string
 }
 
+// Proper struct message types to avoid type assertion issues.
+type marketModelsLoadedMsg struct{ models []string }
+type marketAnalysisMsg struct{ text string }
+type marketPullDoneMsg struct{ err error }
+type marketPullProgressMsg struct{ text string }
+
+var suitableModelsForAnalysis = []string{
+	"phi3", "phi4", "llama3.2", "llama3", "qwen2.5", "mistral", "gemma2", "gemma",
+}
+
 type MarketModel struct {
 	report          *market.MarketReport
 	suggestions     []Opportunity
@@ -86,27 +107,31 @@ type MarketModel struct {
 	pulling         bool
 	analyzing       bool
 	analysis        string
+	rawAnalysis     string // the full analysis text (before potential wrapping)
 	err             error
 	width           int
+	height          int
 	cursor          int
 	oppCursor       int
 	focus           marketArea
 	exported        bool
 	loaded          bool
+	// Scroll support for analysis pane
+	analysisVP        viewport.Model
+	analysisReady     bool
+	analysisViewportH int // height allocated for analysis viewport
 }
 
 func NewMarketModel() MarketModel {
-	return MarketModel{width: 80}
+	return MarketModel{
+		width: 80,
+	}
 }
 
 func (m *MarketModel) Init() tea.Cmd {
 	// Only check ollama models on init — market data fetches lazily
 	return m.fetchModelsCmd()
 }
-
-type marketAnalysisMsg struct{ text string }
-type marketPullDoneMsg struct{ err error }
-type marketModelsLoadedMsg []string
 
 func (m MarketModel) fetchModelsCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -117,18 +142,24 @@ func (m MarketModel) fetchModelsCmd() tea.Cmd {
 		if err != nil {
 			return marketModelsLoadedMsg{}
 		}
-		lines := strings.Split(string(out), "\n")
+		raw := string(out)
+		lines := strings.Split(raw, "\n")
 		var models []string
 		for i, line := range lines {
 			if i == 0 || strings.TrimSpace(line) == "" {
 				continue
 			}
+			// Clean Windows \r characters and split by whitespace
+			line = strings.TrimRight(line, "\r")
 			fields := strings.Fields(line)
 			if len(fields) > 0 {
-				models = append(models, fields[0])
+				name := strings.TrimSpace(fields[0])
+				if name != "" {
+					models = append(models, name)
+				}
 			}
 		}
-		return marketModelsLoadedMsg(models)
+		return marketModelsLoadedMsg{models: models}
 	}
 }
 
@@ -148,39 +179,112 @@ func (m MarketModel) pullModelCmd(modelName string) tea.Cmd {
 			return marketPullDoneMsg{err: fmt.Errorf("ollama not found: %w", err)}
 		}
 		err := exec.Command("ollama", "pull", modelName).Run()
-		return marketPullDoneMsg{err: err}
+		if err != nil {
+			return marketPullDoneMsg{err: fmt.Errorf("pull %s failed: %w", modelName, err)}
+		}
+		return marketPullDoneMsg{}
 	}
+}
+
+// fallbackInsight generates a data-driven analysis summary from the report
+// without needing an LLM. Guaranteed to always return non-empty text.
+func fallbackInsight(report *market.MarketReport) string {
+	if report == nil || len(report.Topics) == 0 {
+		return "No market data available yet."
+	}
+
+	// Find hottest by total stars
+	sorted := make([]market.TopicIntel, len(report.Topics))
+	copy(sorted, report.Topics)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].TotalStars > sorted[j].TotalStars
+	})
+
+	hot := sorted[0]
+
+	// Count surging/rising
+	var surging, rising []string
+	for _, t := range report.Topics {
+		if strings.Contains(t.Momentum, "🚀") {
+			surging = append(surging, t.Topic.Label)
+		} else if strings.Contains(t.Momentum, "📈") {
+			rising = append(rising, t.Topic.Label)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("🔥 Hottest: %s — ★%s across top repos",
+		hot.Topic.Label, marketFmtNum(hot.TotalStars)))
+
+	if len(surging) > 0 {
+		b.WriteString(fmt.Sprintf(" | Surging: %s", strings.Join(surging, ", ")))
+	}
+	if len(rising) > 0 {
+		b.WriteString(fmt.Sprintf(" | Rising: %s", strings.Join(rising, ", ")))
+	}
+
+	// Total ecosystem stats
+	var totalStars, totalHN, totalNew int
+	for _, t := range report.Topics {
+		totalStars += t.TotalStars
+		totalHN += t.HNHits
+		totalNew += t.NewRepos
+	}
+	b.WriteString(fmt.Sprintf("\n📊 Ecosystem: ★%s total stars · %d HN stories (7d) · +%d new repos (30d)",
+		marketFmtNum(totalStars), totalHN, totalNew))
+
+	return b.String()
+}
+
+// selectBestModel picks the best available model for analysis.
+// Returns "" if no suitable model is found.
+func selectBestModel(available []string) (string, bool) {
+	// First, check preferred models in order
+	for _, target := range suitableModelsForAnalysis {
+		for _, model := range available {
+			if strings.HasPrefix(strings.ToLower(model), target) ||
+				strings.Contains(strings.ToLower(model), target) {
+				return model, true
+			}
+		}
+	}
+	// Fallback: return any model at all
+	if len(available) > 0 {
+		return available[0], false
+	}
+	return "", false
 }
 
 func (m MarketModel) analyzeSentimentCmd() tea.Cmd {
 	return func() tea.Msg {
-		_, err := exec.LookPath("ollama")
-		if err != nil {
-			return marketAnalysisMsg{text: "Install Ollama to enable local sentiment analysis."}
+		// Always generate fallback insight first
+		fallback := fallbackInsight(m.report)
+
+		_, ollamaErr := exec.LookPath("ollama")
+		if ollamaErr != nil {
+			return marketAnalysisMsg{text: fallback}
 		}
 
 		if m.report == nil || len(m.report.Topics) == 0 {
-			return nil
+			return marketAnalysisMsg{text: fallback}
 		}
 
 		if m.cursor < 0 || m.cursor >= len(m.report.Topics) {
-			return marketAnalysisMsg{text: "No topic selected."}
+			return marketAnalysisMsg{text: fallback}
 		}
-		topic := m.report.Topics[m.cursor].Topic.Label
+		topic := m.report.Topics[m.cursor]
 
-		selectedModel := "phi3:mini"
-		found := false
-		for _, model := range m.availableModels {
-			if strings.Contains(model, "phi3") || strings.Contains(model, "qwen2.5") || strings.Contains(model, "llama3") {
-				selectedModel = model
-				found = true
-				break
+		selectedModel, found := selectBestModel(m.availableModels)
+		if selectedModel == "" {
+			// No model at all — return fallback + suggest pulling
+			return marketAnalysisMsg{
+				text: fallback + "\n\n💡 No Ollama model found. Press 'p' to install a model for AI-powered insights.",
 			}
 		}
 
 		prompt := fmt.Sprintf(
-			"Act as a technology market analyst. Summarize developer adoption and general 'vibe' for '%s' in 2 sentences.",
-			topic,
+			"Act as a technology market analyst. Summarize developer adoption and 'vibe' for '%s' in 1-2 concise sentences. Focus on actionable insight.",
+			topic.Topic.Label,
 		)
 
 		cmd := exec.Command("ollama", "run", selectedModel, prompt)
@@ -189,14 +293,25 @@ func (m MarketModel) analyzeSentimentCmd() tea.Cmd {
 		out, err := cmd.Output()
 
 		if err != nil {
-			errMsg := fmt.Sprintf("Local model analysis failed: %v", err)
-			if !found || strings.Contains(stderr.String(), "not found") {
-				errMsg = fmt.Sprintf("No suitable model found for analysis. Press 'p' to pull %s.", selectedModel)
+			msg := fallback
+			if !found {
+				msg += fmt.Sprintf("\n\n⚠️  Model '%s' not found locally. Press 'p' to pull it.", selectedModel)
+			} else if strings.Contains(stderr.String(), "not found") {
+				msg += fmt.Sprintf("\n\n⚠️  Model '%s' not found locally. Press 'p' to pull it.", selectedModel)
+			} else {
+				msg += fmt.Sprintf("\n\n⚠️  AI analysis unavailable (%s)", config.RedactSecrets(err.Error()))
 			}
-			return marketAnalysisMsg{text: errMsg}
+			return marketAnalysisMsg{text: msg}
 		}
 
-		return marketAnalysisMsg{text: strings.TrimSpace(string(out))}
+		aiText := strings.TrimSpace(string(out))
+		if aiText == "" {
+			return marketAnalysisMsg{text: fallback}
+		}
+
+		// Combine: fallback (data) + AI insight
+		combined := fallback + "\n\n🤖 " + aiText
+		return marketAnalysisMsg{text: combined}
 	}
 }
 
@@ -204,10 +319,11 @@ func (m MarketModel) Update(msg tea.Msg) (MarketModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 
 	case marketModelsLoadedMsg:
-		m.availableModels = msg
-		if m.report != nil && m.analysis == "" && !m.analyzing {
+		m.availableModels = msg.models
+		if m.report != nil && m.rawAnalysis == "" && !m.analyzing {
 			m.analyzing = true
 			return m, m.analyzeSentimentCmd()
 		}
@@ -221,38 +337,66 @@ func (m MarketModel) Update(msg tea.Msg) (MarketModel, tea.Cmd) {
 			{Target: "Coder", Problem: "TUI Layout Engine for Go", Potential: "📈 Growing niche", Adoption: "GoProxy: 5k/wk", Sentiment: "Vibe: Enthusiastic but early", Velocity: "PR Velocity: High"},
 			{Target: "Vibe Coder", Problem: "Natural Language Schema Gen", Potential: "🔥 Viral on Socials", Adoption: "Low supply", Sentiment: "Vibe: High friction", Velocity: "PR Velocity: N/A"},
 		}
-		if len(m.availableModels) > 0 {
-			m.analyzing = true
-			return m, m.analyzeSentimentCmd()
-		}
+		// Always generate analysis — fallback + AI if available
+		m.analyzing = true
+		return m, m.analyzeSentimentCmd()
 
 	case marketErrMsg:
 		m.err = msg.err
 		m.loading = false
 
 	case marketAnalysisMsg:
-		m.analysis = msg.text
+		m.rawAnalysis = msg.text
 		m.analyzing = false
+		// Update viewport content
+		m.analysis = formatAnalysisContent(msg.text, m.width)
+		if !m.analysisReady {
+			availH := 10
+			if m.height > 20 {
+				availH = m.height / 3
+				if availH < 6 {
+					availH = 6
+				}
+			}
+			m.initAnalysisViewport(m.width, availH)
+		}
+		m.analysisVP.SetContent(m.analysis)
+		m.analysisVP.GotoTop()
 
 	case marketPullDoneMsg:
 		m.pulling = false
 		if msg.err != nil {
-			m.analysis = "Pull failed: " + msg.err.Error()
+			m.rawAnalysis = fmt.Sprintf("Pull failed: %s", msg.err.Error())
+			m.analysis = formatAnalysisContent(m.rawAnalysis, m.width)
 		} else {
-			m.analysis = "Model pulled successfully! Retrying analysis..."
+			m.rawAnalysis = "Model pulled successfully! Running analysis..."
+			m.analysis = formatAnalysisContent(m.rawAnalysis, m.width)
 			m.analyzing = true
 			return m, m.analyzeSentimentCmd()
 		}
 
+	case marketPullProgressMsg:
+		m.rawAnalysis = msg.text
+		m.analysis = formatAnalysisContent(msg.text, m.width)
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab", "ctrl+n":
-			if m.focus == areaTrends {
+			// Cycle through focus areas: Trends -> Analysis -> Opportunities -> back
+			switch m.focus {
+			case areaTrends:
+				m.focus = areaAnalysis
+			case areaAnalysis:
 				m.focus = areaOpportunities
-			} else {
+			case areaOpportunities:
 				m.focus = areaTrends
 			}
+
 		case "up", "k":
+			if m.focus == areaAnalysis && m.analysisReady {
+				m.analysisVP.LineUp(1)
+				return m, nil
+			}
 			if m.focus == areaTrends {
 				if m.cursor > 0 {
 					m.cursor--
@@ -262,12 +406,17 @@ func (m MarketModel) Update(msg tea.Msg) (MarketModel, tea.Cmd) {
 					m.oppCursor--
 				}
 			}
+
 		case "down", "j":
+			if m.focus == areaAnalysis && m.analysisReady {
+				m.analysisVP.LineDown(1)
+				return m, nil
+			}
 			if m.focus == areaTrends {
 				if m.report != nil && m.cursor < len(m.report.Topics)-1 {
 					m.cursor++
 					m.analyzing = true
-					m.analysis = ""
+					m.rawAnalysis = ""
 					return m, m.analyzeSentimentCmd()
 				}
 			} else {
@@ -275,6 +424,7 @@ func (m MarketModel) Update(msg tea.Msg) (MarketModel, tea.Cmd) {
 					m.oppCursor++
 				}
 			}
+
 		case "e":
 			if m.report != nil {
 				path, err := exportHTML(m.report)
@@ -283,19 +433,40 @@ func (m MarketModel) Update(msg tea.Msg) (MarketModel, tea.Cmd) {
 					_ = utils.OpenURL("file://" + path)
 				}
 			}
+
 		case "p":
-			if strings.Contains(m.analysis, "Press 'p' to pull") && !m.pulling {
+			if strings.Contains(m.rawAnalysis, "Press 'p' to") && !m.pulling {
 				m.pulling = true
-				m.analysis = "Pulling phi3:mini... (this may take a few minutes)"
-				return m, m.pullModelCmd("phi3:mini")
+				targetModel := "phi3:mini"
+				if selected, found := selectBestModel(m.availableModels); found || len(m.availableModels) == 0 {
+					if found {
+						targetModel = selected
+					}
+				}
+				m.rawAnalysis = fmt.Sprintf("Pulling %s... (this may take a few minutes)", targetModel)
+				m.analysis = formatAnalysisContent(m.rawAnalysis, m.width)
+				return m, m.pullModelCmd(targetModel)
 			}
+
 		case "r":
 			m.loading = true
 			m.err = nil
 			m.exported = false
+			m.rawAnalysis = ""
+			m.analysis = ""
 			return m, fetchMarketCmd()
 		}
 	}
+
+	// If analysis viewport is active and ready, pass resize/key msgs to it
+	if m.analysisReady {
+		var vpCmd tea.Cmd
+		m.analysisVP, vpCmd = m.analysisVP.Update(msg)
+		if vpCmd != nil {
+			return m, vpCmd
+		}
+	}
+
 	return m, nil
 }
 
@@ -329,9 +500,9 @@ func (m MarketModel) View() string {
 
 	b.WriteString(CaptionStyle.Render("  "+m.report.Summary) + "\n\n")
 
-	// Analysis panel
+	// Analysis panel with scroll support
 	analysisColor := BorderColor
-	if m.focus == areaTrends {
+	if m.focus == areaAnalysis {
 		analysisColor = ActiveBorder
 	}
 	analysisStyle := CardStyle.Copy().Width(w - 4).BorderForeground(analysisColor)
@@ -342,7 +513,30 @@ func (m MarketModel) View() string {
 	}
 	if analysisText != "" {
 		title := CardHeaderStyle.Render("🤖 STRATEGIC INTELLIGENCE")
-		b.WriteString(analysisStyle.Render(title+"\n"+analysisText) + "\n\n")
+		// Use viewport for analysis if content is large enough
+		if m.analysisReady && !m.analyzing {
+			// Check if content exceeds viewport height
+			availH := 10
+			if m.height > 20 {
+				availH = m.height / 3
+				if availH < 6 {
+					availH = 6
+				}
+			}
+			m.analysisVP.Width = w - 8
+			m.analysisVP.Height = availH
+			content := title + "\n" + m.analysis
+			m.analysisVP.SetContent(content)
+			rendered := m.analysisVP.View()
+			// Add scroll indicator if needed
+			if m.analysisVP.TotalLineCount() > m.analysisVP.VisibleLineCount() {
+				pct := int(float64(m.analysisVP.YOffset) / float64(m.analysisVP.TotalLineCount()-m.analysisVP.VisibleLineCount()) * 100)
+				rendered += "\n" + scrollIndicatorStyle.Render(fmt.Sprintf("  ↑/↓ scroll · %d%%", pct))
+			}
+			b.WriteString(analysisStyle.Render(rendered) + "\n\n")
+		} else {
+			b.WriteString(analysisStyle.Render(title+"\n"+analysisText) + "\n\n")
+		}
 	} else {
 		b.WriteString("\n")
 	}
@@ -419,6 +613,30 @@ func (m MarketModel) View() string {
 	}
 
 	return b.String()
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+// formatAnalysisContent wraps analysis text for display (pass-through for now,
+// could add wrapping/truncation logic later).
+func formatAnalysisContent(text string, width int) string {
+	return text
+}
+
+// marketFmtNum formats a number with k suffix (same as fmtNum but public name).
+func marketFmtNum(n int) string {
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+// initAnalysisViewport sets up a scrollable viewport for the analysis pane.
+func (m *MarketModel) initAnalysisViewport(width, height int) {
+	vp := viewport.New(width, height)
+	vp.Style = lipgloss.NewStyle().Padding(0, 1)
+	m.analysisVP = vp
+	m.analysisReady = true
 }
 
 // ── HTML Export ───────────────────────────────────────────────────────────────
